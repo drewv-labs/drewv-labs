@@ -12,49 +12,22 @@ The lab utilizes a hybrid Apple Silicon Macs and Debian based development machin
 ## Kit File Structure
 
 ```text
-lildebbyhelpers/
+lildebbyhelpers/                → Core Debian Helpers
 ├── harden.sh                   → Removes default "user" from VF2 boards
 └── pregame.sh                  → Updates <user> and <hostname> from default
 
-vf2-hailo8-kit/
+sifive-p550-databroker/         → SiFive HiFive Premier P550 Data Broker
 ├── flash-sd.sh                 → SD card flashing utility
-├── deploy-carepackage.sh       → Pushes toolkit to remote nodes
+├── deploy-forge.sh             → Pushes toolkit to remote nodes
+└── forge/
+    └── forge-node.sh           → Unified P550 Data Broker "BrakerBox" provisioning engine
+
+vf2-hailo8-kit/                 → StarFive VisionFive2 + Hailo-8(L) Inference Engine
+├── flash-sd.sh                 → SD card flashing utility
+├── deploy-forge.sh             → Pushes toolkit to remote nodes
 └── forge/
     └── forge-node.sh           → Unified Hailo-8 & RISC-V provisioning engine
 ```
-*   The root directory contains `flash-sd.sh` and `deploy-carepackage.sh`.
-*   The `forge-node.sh` script is now located in the `forge` subdirectory.
-
-## `forge-node.sh` Monoscript Usage
-The `forge-node.sh` engine serves as the single entrypoint for provisioning nodes. Run the script as your standard user, as it internally escalates to `sudo` when necessary.
-
-**Standard Provisioning**
-To run the generic core setup:
-```bash
-./forge-node.sh --all
-```
-
-**DREW-V Lab Deployments**
-To run the full core setup and append the DREW-V Software Suite (MendelCode, Caroline-V):
-```bash
-./forge-node.sh --all --mendelcode --caroline-v
-```
-
-**Headless Tailscale Mesh**
-To run the core setup and install Tailscale:
-```bash
-./forge-node.sh --all --tailscale
-```
-
-**Granular Stage Execution**
-You can execute individual phases manually if a kernel update forces a reboot mid-process:
-*   `--core`: Executes `run_core()` for system locales, APT sources, and OS de-bloating.
-*   `--driver`: Executes `run_driver()` to compile and install the PCIe driver and firmware.
-*   `--api`: Executes `run_api()` to compile the HailoRT C++ API and `pyhailort` wheel.
-*   `--uv`: Executes `run_uv()` to install the Astral `uv` tool.
-*   `--tailscale`: Executes `run_tailscale()` to install Tailscale and enable zero-trust SSH.
-*   `--mendelcode`: Executes `run_mendelcode()` to install the MendelCode environment.
-*   `--caroline-v`: Executes `run_caroline_v()` to install the Caroline-V environment.
 
 
 ----

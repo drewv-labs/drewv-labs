@@ -1,5 +1,42 @@
 # RISC-V Hailo-8(L) Edge AI NPU Inference Engine
 
+*   The root directory contains `flash-sd.sh` and `deploy-carepackage.sh`.
+*   The `forge-node.sh` script is now located in the `forge` subdirectory.
+
+## Usage
+The `forge-node.sh` engine serves as the single entrypoint for provisioning nodes. Run the script as your standard user, as it internally escalates to `sudo` when necessary.
+
+**Standard Provisioning**
+To run the generic core setup:
+```bash
+./forge-node.sh --all
+```
+
+**DREW-V Lab Deployments**
+To run the full core setup and append the DREW-V Software Suite (MendelCode, Caroline-V):
+```bash
+./forge-node.sh --all --mendelcode --caroline-v
+```
+
+**Headless Tailscale Mesh**
+To run the core setup and install Tailscale:
+```bash
+./forge-node.sh --all --tailscale
+```
+
+**Granular Stage Execution**
+You can execute individual phases manually if a kernel update forces a reboot mid-process:
+*   `--core`: Executes `run_core()` for system locales, APT sources, and OS de-bloating.
+*   `--driver`: Executes `run_driver()` to compile and install the PCIe driver and firmware.
+*   `--api`: Executes `run_api()` to compile the HailoRT C++ API and `pyhailort` wheel.
+*   `--uv`: Executes `run_uv()` to install the Astral `uv` tool.
+*   `--tailscale`: Executes `run_tailscale()` to install Tailscale and enable zero-trust SSH.
+*   `--mendelcode`: Executes `run_mendelcode()` to install the MendelCode environment.
+*   `--caroline-v`: Executes `run_caroline_v()` to install the Caroline-V environment.
+
+---
+
+
 **Silicon Valley, USA** - **September 21, 2023** - StarFive Technology, a leading provider of high-performance AI and IoT solutions, today announced the release of the RISC-V Hailo-8(L) Edge AI NPU Inference Engine. This innovative engine is designed to deliver exceptional performance and efficiency for edge AI applications, leveraging the RISC-V architecture and the advanced Hailo-8(L) NPU.
 
 The RISC-V Hailo-8(L) Edge AI NPU Inference Engine is optimized for a wide range of edge AI workloads, including image recognition, object detection, and natural language processing. It features a powerful Hailo-8(L) NPU that can handle complex AI tasks with high speed and low power consumption, making it ideal for applications in smart cities, industrial automation, and consumer electronics.
@@ -47,9 +84,28 @@ The RISC-V Hailo-8(L) Edge AI NPU Inference Engine is available now and is compa
 
 For more information about the RISC-V Hailo-8(L) Edge AI NPU Inference Engine and its capabilities, please visit the StarFive Technology website or contact the company's sales team.
 
+
+---
+
+
 **About StarFive Technology**:
 StarFive Technology is a leading provider of high-performance AI and IoT solutions, offering a range of products and services that enable customers to build intelligent and connected devices. With a focus on innovation and excellence, StarFive Technology is committed to delivering cutting-edge technology that meets the evolving needs of the global market. For more information, please visit [StarFive Technology](https://www.starfive-tech.com/).
 
 **Contact Information**:
 - **Media Relations**: media@starfive-tech.com
 - **Sales Inquiry**: sales@starfive-tech.com
+
+
+
+----
+
+Made with ♥️ by
+```py
+DREW-V := {
+  "Simplicity in the Architecture",
+  "Efficiency in the Engineering",
+  "Purity in the Science",
+  "Audacity in the Art",
+  "Life in the Logic"
+}
+```
