@@ -8,13 +8,16 @@ PG_VERSION="18"
 
 
 echo "=== 0. Pregame ==="
+
 # Permanently disable all sleep/suspend states (prevents EIC7700X kernel hangs)
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+
 # Update packages and ensure the P550 hardware fan controller + core storage tools are installed
 sudo apt update && sudo apt upgrade -y
 sudo apt install -y fancontrol-config-p550-premier \
   mdadm lvm2 xfsprogs smartmontools nvme-cli \
   linux-tools-common linux-tools-generic sysstat iotop htop jq curl git build-essential
+
 # Boot strictly to headless console
 sudo systemctl set-default multi-user.target
 
