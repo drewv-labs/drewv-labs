@@ -6,6 +6,7 @@ MOUNT_POINT="/mnt/nvme_pgdata"
 PG_VERSION="18"
 
 
+
 echo "=== 0. Pregame ==="
 # Permanently disable all sleep/suspend states (prevents EIC7700X kernel hangs)
 sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
@@ -44,9 +45,12 @@ EOF
 sudo sysctl --system
 
 
+
 echo "=== 1. Installing NVMe & Filesystem Utilities ==="
 sudo apt-get update
 sudo apt-get install -y nvme-cli xfsprogs curl ca-certificates gnupg lsb-release
+
+
 
 echo "=== 2. Checking WD_BLACK SN850X LBA Sector Format ==="
 sudo nvme id-ns -H "$NVME_DEV" | grep "LBA Format"
@@ -62,6 +66,8 @@ if [ -n "$LBA_4K_INDEX" ]; then
 else
     echo "4K LBA index not auto-detected; keeping current sector format."
 fi
+
+
 
 echo "=== 3. Partitioning & Formatting XFS (4K-Aligned) ==="
 sudo parted -s "$NVME_DEV" mklabel gpt
@@ -79,6 +85,8 @@ fi
 sudo mount -a
 sudo systemctl daemon-reload
 
+
+
 echo "=== 4. Installing PostgreSQL $PG_VERSION (PGDG Ubuntu Noble riscv64) ==="
 sudo install -d /usr/share/postgresql-common/pgdg
 sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
@@ -86,6 +94,8 @@ echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] h
 
 sudo apt-get update
 sudo apt-get install -y "postgresql-${PG_VERSION}"
+
+
 
 echo "=== 5. Relocating Cluster to WD_BLACK SN850X & Tuning for SiFive P550 ==="
 sudo systemctl stop postgresql
@@ -129,5 +139,6 @@ EOF
 sudo chown -R postgres:postgres "$CONF_DIR"
 sudo systemctl start postgresql
 sudo systemctl status postgresql --no-pager
+
 
 echo "=== BrakerBox PostgreSQL $PG_VERSION is LIVE on WD_BLACK SN850X ==="
