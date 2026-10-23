@@ -5,6 +5,45 @@ NVME_DEV="/dev/nvme0n1"
 MOUNT_POINT="/mnt/nvme_pgdata"
 PG_VERSION="18"
 
+
+echo "=== 0. Pregame ==="
+# Permanently disable all sleep/suspend states (prevents EIC7700X kernel hangs)
+sudo systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target
+# Update packages and ensure the P550 hardware fan controller + core storage tools are installed
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y fancontrol-config-p550-premier \
+  mdadm lvm2 xfsprogs smartmontools nvme-cli \
+  linux-tools-common linux-tools-generic sysstat iotop htop jq curl git build-essential
+# Boot strictly to headless console
+sudo systemctl set-default multi-user.target
+
+# Purge Snap packages and the snapd daemon
+sudo snap remove --purge firefox snap-store bare core22 gtk-common-themes gnome-42-2204 2>/dev/null || true
+sudo systemctl stop snapd.socket snapd.service
+sudo apt purge -y snapd ubuntu-desktop* gnome-shell* gdm3 xwayland \
+apport whoopsie unattended-upgrades packagekit modemmanager
+
+# Clean up orphaned GUI libraries
+sudo apt autoremove -y --purge
+sudo apt clean
+
+cat << 'EOF' | sudo tee /etc/sysctl.d/90-brackerbox-broker.conf
+# Allow non-root perf sampling of P550 L1/PL2/CCACHE hardware counters
+kernel.perf_event_paranoid = -1
+kernel.kptr_restrict = 0
+
+# Broker memory & dirty page writeback tuning
+vm.swappiness = 10
+vm.dirty_background_ratio = 5
+vm.dirty_ratio = 15
+
+# Disable NMI watchdog interrupts to reduce CPU jitter
+kernel.nmi_watchdog = 0
+EOF
+
+sudo sysctl --system
+
+
 echo "=== 1. Installing NVMe & Filesystem Utilities ==="
 sudo apt-get update
 sudo apt-get install -y nvme-cli xfsprogs curl ca-certificates gnupg lsb-release
