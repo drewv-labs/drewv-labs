@@ -23,11 +23,16 @@ This doc serves as the central source of truth and capacity plan for DREW-V Labs
   * **`BrackerBench-*`**: Dedicated Database & Microarchitecture Test Bench nodes.
   * **`VisionFerret-*`**: Dedicated Edge AI / NPU & RF DSP Test Bench nodes.
 
+---
+
+
 ### 1. Networking Fabric
 | Node | SpaceReq | OS | Hardware | Notes | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `LabWrt-R6S` | `1U` (U02 Shelf) | `OpenWrt` | `FriendlyElec NanoPi R6S (RK3588S 8GB / 32GB eMMC)` | `2x 2.5GbE + 1x 1GbE RJ45` | Dedicated Lab router, firewall, & local DNS/DHCP authority (`10.0.10.0/24`, `.lab` domain) |
 | `Lab Switch` | `1U` (U01) | `Unmanaged` | `Sodola 26-Port Multi-Gig Switch (SL-SWTG0224AS)` | `24x 2.5GbE RJ45 (Ports 1-24)` + `2x 10GbE SFP+ Key Ports (Ports 25-26)` | Core 160Gbps L2 switching backplane (`VLAN` port-isolation switch set to `OFF`; `SM` set to `10G`) |
+
+---
 
 ### 2. Production Nodes (Rack + Desk-Tethered)
 | Node | SpaceReq | OS | Hardware | Notes | Description |
@@ -39,6 +44,8 @@ This doc serves as the central source of truth and capacity plan for DREW-V Labs
 | `CoffeeCan-Proxmox` | `Desk` | `Proxmox VE` | `2013 Apple Mac Pro 6,1 (Intel Xeon / 64GB ECC DDR3)` | `Dual GbE RJ45` (Hardlined to `Lab Switch`) | Desk-side Lab Hypervisor positioned next to `ZedBook` for on-demand Lab VM & container provisioning |
 | `ZedBook` | `Desk` | `macOS` | `Apple MacBook Pro 16" (M2 Max / Pro Display XDR / CalDigit E5 TB5)` | `2.5GbE / 10GbE` (Hardlined to `Lab Switch`) | Primary Engineering Workstation, Siril Astrophotography Processing, & Local LLM Orchestration |
 
+---
+
 ### 3. Testing & Benchmarking Nodes
 | Node | SpaceReq | OS | Hardware | Notes | Description |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -49,6 +56,8 @@ This doc serves as the central source of truth and capacity plan for DREW-V Labs
 | `BrackerBench-VF2` | `1U` (U02 Shelf) | `Debian` | `StarFive VisionFive 2 8GB (JH7110, RVA20 RV64GC Scalar)` | `4x U74 2-Wide InO @ 1.5GHz` + `2MB L2` + `WD_Black SN750 2TB (Gen2 x1)` | Data Broker Benchmarking: Baseline 2-Wide In-Order `RVA20` Scalar Control Node (passive aluminum case; ~42C idle / ~60C full load) |
 | `VisionFerret-H8` | `1U` (U02 Shelf) | `Debian` | `StarFive VisionFive 2 8GB (JH7110, RVA20 RV64GC Scalar)` | `4x U74 2-Wide InO @ 1.5GHz` + `M.2 PCIe Hailo-8 (26 TOPS)` | Edge ML Benchmarking: $300 "Sweet-Spot" AI Kit tier (Single-Context on-chip SRAM execution) & 20.1 MHz RF Observatory |
 | `VisionFerret-H8L` | `1U` (U02 Shelf) | `Debian` | `StarFive VisionFive 2 8GB (JH7110, RVA20 RV64GC Scalar)` | `4x U74 2-Wide InO @ 1.5GHz` + `M.2 PCIe Hailo-8L (13 TOPS)` | Edge ML Benchmarking: A/B Twin for testing Multi-Context PCIe DMA host-RAM spills (8GB native for parity; clampable via `mem=4G` to model sub-$200 entry AI kits) |
+
+---
 
 ### 4. 15U Rack Stack Elevation Model
 ~~~text
@@ -71,6 +80,8 @@ U01 [                        Sodola Switch                          ]
     + Desk-Tethered to U01 Switch: [ ZedBook ] & [ CoffeeCan-Proxmox ]
 ~~~
 
+---
+
 ### 5. Experimental Normalization & Microarchitecture Matrix (`BrackerBench` Series)
 | Node | Core & Pipeline Width | ISA Profile & Extensions | Cache Hierarchy | NVMe Bus Ceiling | Parity Normalization Knobs |
 | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -84,7 +95,12 @@ U01 [                        Sodola Switch                          ]
 
 ## Part II: `AdaLovespace` Distributed Field Astrophotography Cluster
 
-Split physically into **`AdaStack`** (stationary base-camp compute stack with active push-pull Noctua cooling) and **`AdaScope`** (lightweight, vibration-free passive-cooled payload riding on the Optical Tube Assembly), linked across the mount hinge by a single PoE Ethernet hardline.
+While the Lab is focused on general RISC-V Edge AI & Data Brokerage research, we leverage astrophotography for field deployments and testing. Astrophotography is a discipline that requires unrelenting precision and encompasses a wide range of technical challenges that help strengthen the Lab's research tracks. For example, Out-of-Order processing is peak for high throughput PostgreSQL operations however the In-Order processing of the VisionFive2 + Hailo-8 AI kit (Caroline-V/VisionFerret-H8) provides lower power inferencing in the field, saving that precious battery pack. Also, space is badass and training cheap open source hardware and software to operate an imaging rig is fun, I highly recommend it! :)
+
+Split physically into `AdaStack` (stationary base-camp compute stack with active push-pull fan cooling) and `AdaScope` (lightweight, vibration-free passive-cooled payload riding on the Optical Tube Assembly), linked across the mount hinge by a single PoE Ethernet hardline.
+
+
+---
 
 ### 1. `AdaStack` (Stationary Base-Camp Stack)
 | Node | Cooling | OS | Hardware | Notes | Description |
@@ -93,6 +109,8 @@ Split physically into **`AdaStack`** (stationary base-camp compute stack with ac
 | `Caroline-V` | `Active` (4x 40mm Top + 1x 120mm Bottom Noctua) | `Debian` | `StarFive VisionFive 2 8GB (RVA20)` | `M.2 Hailo-8 (26 TOPS)` + `BeQuiet Heatsink` + `PoE Texas HAT` | Production Field Edge AI Inference Engine (real-time sub-frame grading, cloud/satellite rejection, & guiding telemetry wrapped by `CarrierPigeons`) |
 | `JakeBase-Pi` -> ~`JakeBase-V` | `Active` | `Debian` | `Raspberry Pi 5` -> transitioning to `StarFive VisionFive 2 8GB` | `WD_Black SN770 1TB NVMe` | Field Data Broker & FITS Ingestion Vault (`PigeonCoop` field instance + PostgreSQL + local SMB/NFS staging) |
 | `MargiStars` -> ~`MargiMaestro` | `Active` | `Linux` | `Intel N100 16GB MiniPC` -> transitioning to `RISC-V SBC` | `Headless INDI / Ekos` | Observatory Sequencer & Orchestrator (slated to transition from KStars/Ekos GUI on N100 to headless RISC-V `MargiMaestro` running `MaestroEngine`) |
+
+---
 
 ### 2. `AdaScope` (On-OTA Telescope Payload — Zero-Vibration Passive Cooling)
 | Node | Cooling | OS | Hardware | Notes | Description |
