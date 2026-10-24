@@ -1,6 +1,6 @@
 <div align="center">
 
-![DREW-V Labs](.github/images/drewv-labs-github-banner-rounded.png)  
+![DREW-V Labs](https://github.com/drewv-labs/drewv-labs-toolkit/blob/main/.github/images/drewv-labs-github-banner-rounded.png)  
 
 # RISC-V Edge Toolkit
 
