@@ -2,9 +2,9 @@
 
 ![DREW-V Labs](https://github.com/drewv-labs/drewv-labs-toolkit/blob/main/.github/images/drewv-labs-github-banner-rounded.png)  
 
-</div>
+# Systems Topology  
 
-# DREW-V Labs Systems Topology  
+</div>
 
 *as of 2026-10-24*
 
