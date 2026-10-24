@@ -5,7 +5,7 @@
 # RISC-V Edge Toolkit
 
 
-![RISC-V Architecture](https://img.shields.io/badge/Architecture-RISC--V-orange?style=for-the-badge) ![Debian Unstable](https://img.shields.io/badge/OS-Debian_Unstable-red?style=for-the-badge) ![PostgreSQL Database](https://img.shields.io/badge/Database-PostgreSQL-blue?style=for-the-badge) ![MQTT](https://img.shields.io/badge/MQTT-broker-orange?style=for-the-badge) ![Hailo-8 NPU](https://img.shields.io/badge/NPU-Hailo--8-blue?style=for-the-badge)  
+![RISC-V Architecture](https://img.shields.io/badge/Architecture-RISC--V-orange?style=for-the-badge) ![Debian Unstable](https://img.shields.io/badge/OS-Debian_Unstable-red?style=for-the-badge) ![PostgreSQL Database](https://img.shields.io/badge/Database-PostgreSQL-blue?style=for-the-badge) ![Hailo-8 NPU](https://img.shields.io/badge/NPU-Hailo--8-blue?style=for-the-badge)  
 
 </div>
 
