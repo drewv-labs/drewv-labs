@@ -1,3 +1,9 @@
+<div align="center"> 
+
+![DREW-V Labs](https://github.com/drewv-labs/drewv-labs-toolkit/blob/main/.github/images/drewv-labs-github-banner-rounded.png)  
+
+</div>
+
 # DREW-V Labs Systems Topology  
 
 *as of 2026-10-23*  
@@ -6,11 +12,9 @@ This doc is for central truth & planning out personal lab builds for distributed
 
 ---
  
-## 15U Research Lab Rack Target Design: 
+## 15U Research Rack Target Design: 
 
-**Design Target Complete Date**: `2027-01-01` 
-
-`~` next to Node Name indicates that the Node is still on the wish list. 
+`~` next to Node Name indicates that the Node . 
 
 ### Networking
 | Node | SpaceReq | OS | Hardware | Notes | Description |  
@@ -34,7 +38,7 @@ This doc is for central truth & planning out personal lab builds for distributed
 | `BrackerBench-P550` | `1U` | `Ubuntu` | `SiFive Premier P550 32GB RVA20 (RV76GC + Zba/Zbb)` | `3-Wide OoO` + `WD_Black SN850X 1TB` + `Native 20TOPS` + `3 Wide OoO Proc` | Data Broker Benchmarking
 | `BrackerBench-VF2` | `1U` | `Debian` | `StarFive VisionFive2 8GB RVA20 (RV64GC Scalar)` | `2-Wide InO` + `WD_Black SN750 1TB` | Data Broker Benchmarking
 | `VisionFerret-H8` | `1U` | `Debian` | `StarFive VisionFive2 8GB RVA20 (RV64GC Scalar)` | `2-Wide InO` + `PCIe Hailo-8 26TOPS` | Edge ML Benchmarking
-| ~`VisionFerret-H8L` | `1U` | `Debian` | `StarFive VisionFive2 8GB RVA20 (RV64GC Scalar)` | `2-Wide InO` + `PCIe Hailo-8L 13TOPS` | Edge ML Benchmarking
+| `VisionFerret-H8L` | `1U` | `Debian` | `StarFive VisionFive2 8GB RVA20 (RV64GC Scalar)` | `2-Wide InO` + `PCIe Hailo-8L 13TOPS` | Edge ML Benchmarking
 
 ### Rack Stack Model
 ```
