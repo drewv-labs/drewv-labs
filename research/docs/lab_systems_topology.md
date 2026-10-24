@@ -42,7 +42,7 @@ This doc serves as the central source of truth and capacity plan for DREW-V Labs
 | `BigRed-WDR48` | `1U` (U08) | `Linux mdadm` | `SilverStone 4-Bay USB 3.0 Enclosure (Set to Clear RAID)` | `4x WD Red Plus 12TB CMR (48TB Raw / ~22TB Usable RAID 10)` | `BrackerBox` Warm Storage Layer & NFS Vault (`LABEL=BIGRED_VAULT` mounted at `/mnt/bigred_wdr48`) |
 | `LilBlu-WDB24` | `1U` (U09) | `Linux mdadm` | `SilverStone 4-Bay USB 3.0 Enclosure (Set to Clear RAID)` | `4x WD Blue 6TB (24TB Raw / ~11TB Usable RAID 10)` | `BrackerBox` Cold Storage & Telemetry Archive (`LABEL=LILBLU_ARCH` mounted at `/mnt/lilblu_wdb24`) |
 | `CoffeeCan-Proxmox` | `Desk` | `Proxmox VE` | `2013 Apple Mac Pro 6,1 (Intel Xeon / 64GB ECC DDR3)` | `Dual GbE RJ45` (Hardlined to `Lab Switch`) | Desk-side Lab Hypervisor positioned next to `ZedBook` for on-demand Lab VM & container provisioning |
-| `ZedBook` | `Desk` | `macOS` | `Apple MacBook Pro 16" (M2 Max / Pro Display XDR / CalDigit E5 TB5)` | `2.5GbE / 10GbE` (Hardlined to `Lab Switch`) | Primary Engineering Workstation, Siril Astrophotography Processing, & Local LLM Orchestration |
+| `ZedBook` | `Desk` | `macOS` | `Apple MacBook Pro M2 Max 96GB` | `2.5GbE / 10GbE` (Hardlined to `Lab Switch`) | Primary Engineering Workstation, Siril Astrophotography Processing, & Local LLM Orchestration |
 
 ---
 
