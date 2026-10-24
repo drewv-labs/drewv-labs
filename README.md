@@ -13,7 +13,7 @@
 
 ## About  
 
-`DREW-V Labs` is focused on the development of a RISC-V based edge AI and Data Brokerage toolkit that is designed to be used in a variety of edge computing environments. Our toolkit is designed to be used with a variety of hardware and software types, and is designed to be easily integrated into existing edge computing environments. We leverage Apple Silicon & Debian based development machines and favor Golang, Rust, & Python based languages to build robust light-but-mighty solutions to unleash the full power of RISC-V technology for open edge science & engineering R&D.
+`DREW-V Labs` is focused on the development of a RISC-V based Edge AI and Data Brokerage. This toolkit toolkit is designed to be used with a variety of hardware and software types, and is designed to be easily integrated into existing edge computing environments. We leverage Apple Silicon & Debian based development machines and favor Golang, Rust, & Python based languages to build robust light-but-mighty solutions to unleash the full power of RISC-V technology for open edge science & engineering R&D.
 
 ---
 
