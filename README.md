@@ -22,15 +22,15 @@ helpers/                      → Shared Helper Scripts
     ├── fix-user.sh           → Removes default "user" from VF2 boards
     └── flash-sd.sh           → SD card flashing utility
 
-nodes/                        → Node-specific provisioning scripts
-├── databrokers/              → Data Broker nodes
-│   ├── hifive-p550/          → SiFive HiFive Premier P550
-│   │   └── forge-brakerbox-p550.sh  → P550 Data Broker provisioning engine
-│   ├── milkv-titan/          → Milk-V Titan
+nodes/                                → Node-specific provisioning scripts
+├── databrokers/                      → Data Broker nodes
+│   ├── hifive-p550/                  → SiFive HiFive Premier P550
+│   │   └── forge-brakerbox-p550.sh   → P550 Data Broker provisioning engine
+│   ├── milkv-titan/                  → Milk-V Titan
 │   │   └── forge-brakerbox-titan.sh  → Titan Data Broker provisioning engine
-│   └── starfive-vf2/         → StarFive VisionFive2
-│       └── forge-brakerbox-vf2.sh   → VF2 Data Broker provisioning engine
-└── inference/                → Inference nodes
-    └── starfive-vf2-hailo8/  → StarFive VisionFive2 + Hailo-8(L)
+│   └── starfive-vf2/                 → StarFive VisionFive2
+│       └── forge-brakerbox-vf2.sh    → VF2 Data Broker provisioning engine
+└── inference/                        → Inference nodes
+    └── starfive-vf2-hailo8/          → StarFive VisionFive2 + Hailo-8(L)
         └── forge-visionferret-h8.sh  → Unified Hailo-8 & RISC-V provisioning engine
 ~~~
