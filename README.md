@@ -15,24 +15,22 @@
 ## Kit File Structure
 
 ~~~text
-lildebbyhelpers/                → Core Debian Helpers
-├── harden.sh                   → Removes default "user" from VF2 boards
-└── pregame.sh                  → Updates <user> and <hostname> from default
+helpers/                      → Shared Helper Scripts
+├── deb/
+│   └── pregame.sh            → Updates <user> and <hostname> from default
+└── vf2/
+    ├── fix-user.sh           → Removes default "user" from VF2 boards
+    └── flash-sd.sh           → SD card flashing utility
 
-nodes/                          → Node-specific provisioning scripts
-├── sifive-p550-databroker/     → SiFive HiFive Premier P550 Data Broker
-│   ├── flash-sd.sh             → SD card flashing utility
-│   ├── deploy-forge.sh         → Pushes toolkit to remote nodes
-│   └── forge/
-│       └── forge-brakerbox-p550.sh  → Unified P550 Data Broker provisioning engine
-├── starfive-vf2-databroker/    → StarFive VisionFive2 Databroker
-│   ├── flash-sd.sh             → SD card flashing utility
-│   ├── deploy-forge.sh         → Pushes toolkit to remote nodes
-│   └── forge/
-│       └── forge-brakerbench-vf2.sh  → Unified VF2 Databroker provisioning engine
-└── starfive-vf2-hailo-ai/      → StarFive VisionFive2 + Hailo-8(L) Inference Engine
-    ├── flash-sd.sh             → SD card flashing utility
-    ├── deploy-forge.sh         → Pushes toolkit to remote nodes
-    └── forge/
+nodes/                        → Node-specific provisioning scripts
+├── databrokers/              → Data Broker nodes
+│   ├── hifive-p550/          → SiFive HiFive Premier P550
+│   │   └── forge-brakerbox-p550.sh  → P550 Data Broker provisioning engine
+│   ├── milkv-titan/          → Milk-V Titan
+│   │   └── forge-brakerbox-titan.sh  → Titan Data Broker provisioning engine
+│   └── starfive-vf2/         → StarFive VisionFive2
+│       └── forge-brakerbox-vf2.sh   → VF2 Data Broker provisioning engine
+└── inference/                → Inference nodes
+    └── starfive-vf2-hailo8/  → StarFive VisionFive2 + Hailo-8(L)
         └── forge-visionferret-h8.sh  → Unified Hailo-8 & RISC-V provisioning engine
 ~~~
