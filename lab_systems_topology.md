@@ -60,15 +60,15 @@ U15 |---------------------------------------------------------------|
 U14 |                                                               |
 U13 |                       BabbageBox-RTX                          |
 U12 |---------------------------------------------------------------| 
-U10 [                        VentedSpacer                           ]
-U09 [                        LilBlu-WDB24                           ]
-U08 [                        BigRed-WDR48                           ]
-U07 [                      BrakerBox-Titan                          ]
-U05 [                     BrakerBench-Titan                         ]
+U11 [                        VentedSpacer                           ]
+U10 [                        LilBlu-WDB24                           ]
+U09 [                        BigRed-WDR48                           ]
+U08 [                      BrakerBox-Titan                          ]
+U07 [                     BrakerBench-Titan                         ]
 U06 [                       BrakerBench-J2                          ]
-U04 [                       BrakerBench-J1                          ]
-U03 [                      BrakerBench-P550                         ]
-U10 [                        VentedSpacer                           ]
+U05 [                       BrakerBench-J1                          ]
+U04 [                      BrakerBench-P550                         ]
+U03 [                        VentedSpacer                           ]
 U02 [   LabWrt-R6S  |  VFerret-H8  |  VFerret-H8L  |  BBench-VF2    ]
 U01 [                        Sodola Switch                          ]
     -----------------------------------------------------------------
