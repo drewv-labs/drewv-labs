@@ -102,7 +102,7 @@ Split physically into `AdaStack` (stationary base-camp compute stack with active
 | `AdaSwitch` | `Active` | `Unmanaged` | `Netgear GS308PP` 8-port Gigabit POE+ | 90W POE Injector | Cluster network backbone and power distribution |
 | `Caroline-V` | `Active` (4x 40mm Top + 1x 120mm Bottom Noctua) | `Debian` | (naked) [StarFive VisionFive 2](https://www.starfivetech.com/en/index.php) 8GB (JH7110, RVA20 RV64GC Scalar) | M.2 Hailo-8 (26 TOPS) + BeQuiet Heatsink + PoE Texas HAT | Production Field Edge AI Inference Engine (real-time sub-frame grading, cloud/satellite rejection, & guiding telemetry wrapped by [CarrierPigeons](https://github.com/drewv-labs/carrier-pigeons) |
 | `JakeBase-Pi` -> $`JakeBase-V` | `Active` | `Debian` | `RaspberryPi 5` 8GB -> transitioning to `RISC-V SBC` | WD_Black SN770 1TB NVMe | Field Data Broker & FITS Ingestion Vault |
-| `MargiStars-Ekos` -> $`MargiMaestro` | `Active` | `Linux` | `Intel N100 16GB MiniPC` -> transitioning to `RISC-V SBC` | KStars/Ekos GUI | Observatory Sequencer & Orchestrator (slated to transition from KStars/Ekos GUI on N100 to headless RISC-V `MargiMaestro` running `MaestroEngine`, a Go-powered Inference Injection Optimized Orchestration Event Engine) |
+| `MargiStars-Ekos` -> $`MargiMaestro-V` | `Active` | `Linux` | `Intel N100 16GB MiniPC` -> transitioning to `RISC-V SBC` | KStars/Ekos GUI | Observatory Sequencer & Orchestrator (slated to transition from KStars/Ekos GUI on N100 to headless RISC-V `MargiMaestro` running `MaestroEngine`, a Go-powered Inference Injection Optimized Orchestration Event Engine) |
 
 ---
 
