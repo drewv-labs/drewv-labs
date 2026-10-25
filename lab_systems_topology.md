@@ -79,10 +79,10 @@ U01 [                        Sodola Switch                          ]
 | Node | Core & Pipeline Width | ISA Profile & Extensions | Cache Hierarchy | NVMe Bus Ceiling | Parity Normalization Knobs |
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | `BrakerBench-VF2` | 4x SiFive U74 (2-Wide In-Order @ 1.5 GHz) | `RVA20` (`RV64GC` Scalar) | 32KB L1I/D, 2MB Shared L2 | PCIe Gen2 x1 (~400 MB/s) | Baseline Control (`shared_buffers = 2GB`, `work_mem = 64MB`, volatile RAM `journald`) |
-| `BrakerBench-J1` | 8x SpacemiT X60 (2-Wide In-Order @ 1.8 GHz) | `RVA22` (`RV64GCVB` + 256-bit `RVV 1.0`) | 32KB L1I/D, 2MB L2 (1MBx2) | PCIe Gen2 x2 (~800 MB/s) | Pass `mem=8G`, `maxcpus=4`, and pin `scaling_max_freq=1500000` to isolate `RVA22 + RVV 1.0` vs. `VF2` |
 | `BrakerBench-P550` | 4x SiFive P550 (3-Wide Out-of-Order @ 1.4 GHz) | `RVA20 + Zba/Zbb` (`RV64GC_Zba_Zbb`) | 32KB L1 + 256KB L2/core, 4MB Shared L3 | PCIe Gen3 x4 (~3,200 MB/s) | Run `ALTER SYSTEM SET shared_buffers = '2GB'` (or `mem=8G`) to isolate 3-Wide OoO ROB vs. `VF2` |
 | `BrakerBench-Titan` | 8x UltraRISC UR-CP100 (4-Wide Out-of-Order @ 2.0 GHz) | `RVA22 + H-Ext 1.0` (`RV64GCBHX` Server) | 64KB L1 + 512KB L2/core, 8MB L2 + 16MB LLC | PCIe Gen4 x4 (~7,300 MB/s) | Isolates 4-Wide OoO + massive 24MB Server Cache + full Gen4 SN850X throughput (without Vector/NPU) |
 | `BrakerBench-J2` | 8x SpacemiT X100 (4-Wide Out-of-Order @ 2.4 GHz) | `RVA23` (`RV64GCBV` + 1024-bit `RVV 1.0`) | 64KB L1, 4MB L2 (2MBx2) | PCIe Gen3 x4 (~3,200 MB/s) | Isolates `RVA23` 1024-bit Vector + 60 TOPS NPU against `BrakerBench-Titan` and `BrakerBench-P550` |
+| `BrakerBench-J1` | 8x SpacemiT X60 (2-Wide In-Order @ 1.8 GHz) | `RVA22` (`RV64GCVB` + 256-bit `RVV 1.0`) | 32KB L1I/D, 2MB L2 (1MBx2) | PCIe Gen2 x2 (~800 MB/s) | Pass `mem=8G`, `maxcpus=4`, and pin `scaling_max_freq=1500000` to isolate `RVA22 + RVV 1.0` vs. `VF2` |
 
 ---
 
