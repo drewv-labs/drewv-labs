@@ -19,7 +19,7 @@
 
 ## Kit File Structure
 
-```text
+~~~text
 lildebbyhelpers/                → Core Debian Helpers
 ├── harden.sh                   → Removes default "user" from VF2 boards
 └── pregame.sh                  → Updates <user> and <hostname> from default
@@ -40,18 +40,4 @@ nodes/                          → Node-specific provisioning scripts
     ├── deploy-forge.sh         → Pushes toolkit to remote nodes
     └── forge/
         └── forge-visionferret-h8.sh  → Unified Hailo-8 & RISC-V provisioning engine
-```
-
-
-----
-
-Made with ♥️ by
-```py
-DREW-V := {
-  "Simplicity in the Architecture",
-  "Efficiency in the Engineering",
-  "Purity in the Science",
-  "Audacity in the Art",
-  "Life in the Logic"
-}
-```
+~~~
