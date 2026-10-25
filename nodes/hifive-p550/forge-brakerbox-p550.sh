@@ -14,12 +14,12 @@
 set -euo pipefail
 
 # --- Configuration Variables ---
-TARGET_HOSTNAME="${TARGET_HOSTNAME:-brackerbench-p550}"
+TARGET_HOSTNAME="${TARGET_HOSTNAME:-brakerbench-p550}"
 NVME_DEV="${NVME_DEV:-/dev/nvme0n1}"
 MOUNT_POINT="${MOUNT_POINT:-/mnt/nvme_pgdata}"
 FS_LABEL="PGDATA_NVME"
 USE_LVM="${USE_LVM:-true}"          # true = LVM with 15% snapshot reserve; false = raw GPT partition
-VG_NAME="vg_bracker"
+VG_NAME="vg_braker"
 LV_NAME="lv_pgdata"
 PG_VERSION="${PG_VERSION:-18}"
 
@@ -165,7 +165,7 @@ else
 fi
 
 # 0.6 Idempotent Sysctl Configuration (PMU Counters & Memory Writeback)
-SYSCTL_FILE="/etc/sysctl.d/90-brackerbox-broker.conf"
+SYSCTL_FILE="/etc/sysctl.d/90-brakerbox-broker.conf"
 SYSCTL_CONTENT="# Allow non-root perf sampling of P550 L1/PL2/CCACHE hardware counters
 kernel.perf_event_paranoid = -1
 kernel.kptr_restrict = 0
@@ -421,7 +421,7 @@ NVME_PG_ROOT="${MOUNT_POINT}/postgresql"
 NVME_PG_DATA="${NVME_PG_ROOT}/${PG_VERSION}/main"
 DEFAULT_PG_DATA="/var/lib/postgresql/${PG_VERSION}/main"
 CONF_DIR="/etc/postgresql/${PG_VERSION}/main/conf.d"
-DROPIN_CONF="${CONF_DIR}/99-brackerbox-p550.conf"
+DROPIN_CONF="${CONF_DIR}/99-brakerbox-p550.conf"
 
 rm -f "${CONF_DIR}/99-brakerbox-p550.conf"
 
@@ -532,4 +532,4 @@ printf "  • PG 18 Async I/O    : io_method = %s\n" "$ACTIVE_IO_METHOD"
 printf "  • PG Shared Buffers  : %s\n" "$ACTIVE_BUFFERS"
 
 echo ""
-log_ok "BrackerBench-P550 PostgreSQL ${PG_VERSION} Forge Complete!"
+log_ok "BrakerBench-P550 PostgreSQL ${PG_VERSION} Forge Complete!"

@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # --- Configuration Variables ---
-TARGET_HOSTNAME="${TARGET_HOSTNAME:-brackerbench-vf2}"
+TARGET_HOSTNAME="${TARGET_HOSTNAME:-brakerbench-vf2}"
 NVME_DEV="${NVME_DEV:-/dev/nvme0n1}"
 MOUNT_POINT="${MOUNT_POINT:-/mnt/nvme_pgdata}"
 FS_LABEL="PGDATA_NVME"
@@ -165,7 +165,7 @@ else
 fi
 
 # 0.7 Idempotent Sysctl Configuration (U74 PMU Counters & Memory Writeback)
-SYSCTL_FILE="/etc/sysctl.d/90-brackerbench-vf2.conf"
+SYSCTL_FILE="/etc/sysctl.d/90-brakerbench-vf2.conf"
 SYSCTL_CONTENT="# Allow non-root perf sampling of SiFive U74 hardware counters
 kernel.perf_event_paranoid = -1
 kernel.kptr_restrict = 0
@@ -345,7 +345,7 @@ NVME_PG_ROOT="${MOUNT_POINT}/postgresql"
 NVME_PG_DATA="${NVME_PG_ROOT}/${PG_VERSION}/main"
 DEFAULT_PG_DATA="/var/lib/postgresql/${PG_VERSION}/main"
 CONF_DIR="/etc/postgresql/${PG_VERSION}/main/conf.d"
-DROPIN_CONF="${CONF_DIR}/99-brackerbench-vf2.conf"
+DROPIN_CONF="${CONF_DIR}/99-brakerbench-vf2.conf"
 
 # 5.1 Idempotent Data Directory Migration
 if [[ -f "${NVME_PG_DATA}/PG_VERSION" ]]; then
@@ -376,7 +376,7 @@ if [[ "$PG_VERSION" -ge 18 ]]; then
     log_ok "Selected PostgreSQL ${PG_VERSION} Async I/O method: ${IO_METHOD_LINE}"
 fi
 
-# 5.3 Idempotent Drop-In Tuning File (Planner costs locked 1:1 with BrackerBench-P550!)
+# 5.3 Idempotent Drop-In Tuning File (Planner costs locked 1:1 with BrakerBench-P550!)
 mkdir -p "$CONF_DIR"
 DESIRED_PG_CONF="# DREW-V Labs: StarFive VisionFive 2 (8GB LPDDR4 + WD_BLACK SN750 4Kn Control Node)
 data_directory = '${NVME_PG_DATA}'
@@ -446,4 +446,4 @@ printf "  • PG Data Directory  : %s\n" "$ACTIVE_DATA_DIR"
 printf "  • PG Shared Buffers  : %s\n" "$ACTIVE_BUFFERS"
 
 echo ""
-log_ok "BrackerBench-VF2 PostgreSQL ${PG_VERSION} Control Node Forge Complete!"
+log_ok "BrakerBench-VF2 PostgreSQL ${PG_VERSION} Control Node Forge Complete!"

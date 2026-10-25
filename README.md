@@ -1,6 +1,6 @@
 <div align="center">
 
-![DREW-V Labs](https://github.com/drewv-labs/drewv-labs-toolkit/blob/main/.github/images/drewv-labs-github-banner-rounded.png)  
+![DREW-V Labs](https://github.com/drewv-labs/drewv-labs-toolkit/blob/main/.github/images/drewv-labs-github-banner.png)  
 
 # RISC-V Edge Toolkit
 
@@ -13,7 +13,7 @@
 
 ## About  
 
-`DREW-V Labs` is focused on the development of a RISC-V based Edge AI and Data Brokerage. This toolkit toolkit is designed to be used with a variety of hardware and software types, and is designed to be easily integrated into existing edge computing environments. We leverage Apple Silicon & Debian based development machines and favor Golang, Rust, & Python based languages to build robust light-but-mighty solutions to unleash the full power of RISC-V technology for open edge science & engineering R&D.
+`DREW-V Labs` is focused on the development of a RISC-V based Edge ML and Data Brokering R&D. This toolkit toolkit is designed to be used with a variety of hardware and software types, and is designed to be easily integrated into existing edge computing environments. We leverage Apple Silicon & Debian based development machines and favor Golang, Rust, & Python based languages to build robust light-but-mighty solutions to unleash the full power of RISC-V technology for open edge science & engineering frontier.
 
 ---
 
@@ -29,12 +29,12 @@ nodes/                          → Node-specific provisioning scripts
 │   ├── flash-sd.sh             → SD card flashing utility
 │   ├── deploy-forge.sh         → Pushes toolkit to remote nodes
 │   └── forge/
-│       └── forge-brackerbox-p550.sh  → Unified P550 Data Broker provisioning engine
+│       └── forge-brakerbox-p550.sh  → Unified P550 Data Broker provisioning engine
 ├── starfive-vf2-databroker/    → StarFive VisionFive2 Databroker
 │   ├── flash-sd.sh             → SD card flashing utility
 │   ├── deploy-forge.sh         → Pushes toolkit to remote nodes
 │   └── forge/
-│       └── forge-brackerbench-vf2.sh  → Unified VF2 Databroker provisioning engine
+│       └── forge-brakerbench-vf2.sh  → Unified VF2 Databroker provisioning engine
 └── starfive-vf2-hailo-ai/      → StarFive VisionFive2 + Hailo-8(L) Inference Engine
     ├── flash-sd.sh             → SD card flashing utility
     ├── deploy-forge.sh         → Pushes toolkit to remote nodes
