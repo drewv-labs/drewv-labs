@@ -6,7 +6,7 @@
 
 *StarFive VisionFive 2 RISC-V Hailo-8(L) Edge AI/ML NPU Inference Engine*
 
-</dev>
+</div>
 
 The Hailo-8(L) Edge AI NPU Inference Engine is a powerful tool for developers and businesses looking to deploy edge AI/ML solutions that require high performance, low power consumption, and versatility. Its compatibility with various edge computing platforms and support for a wide range of AI algorithms make it an ideal choice for a variety of applications.  
 

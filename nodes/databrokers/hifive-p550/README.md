@@ -6,7 +6,7 @@
 
 *HiFive Premier P550 RISC-V High Throughput PostgreSQL Edge Data Broker*
 
-</dev>
+</div>
 
 
 **Silicon**: HiFive Premier P550 (HF106-001 carrier board).
