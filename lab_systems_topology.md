@@ -14,7 +14,7 @@ This doc serves as capacity plan for **DREW-V Labs** hardware builds supporting 
 
 ## Part I: "Research Rack" Design
 
-**Design Target Complete Date**: `2027-01-01`
+**Design Target Completion Date**: `2027-01-01`
 
 *Legend:*
 * `$` next to a Node Name indicates that the node is currently on the acquisition list / backordered.
