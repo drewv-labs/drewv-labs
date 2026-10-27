@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# DREW-V Labs // Day-0 Node Bootstrap Script (bootstrap-node.sh)
-# Path: helpers/deb/bootstrap-node.sh
+# DREW-V Labs // Day-0 Debian Node Bootstrap Script
+# Path: drewv-labs/riscv-toolkit/bootstrap-debian.sh
 # Description: Idempotent user creation, group assignment, passwordless sudo,
-#              and hostname configuration for Debian/Ubuntu edge & broker nodes.
+#              UTF-8 locale, and hostname configuration for Debian nodes.
 #
 # Usage:
-#   ./bootstrap-node.sh --user drew --hostname brakerbox-titan --nopasswd
+#   ./bootstrap-debian.sh --user drew --hostname brakerbox-titan --nopasswd
 # ==============================================================================
 
 set -euo pipefail
@@ -15,7 +15,8 @@ set -euo pipefail
 TARGET_USER=""
 TARGET_HOSTNAME=""
 NOPASSWD_SUDO="false"
-DEFAULT_GROUPS=("sudo" "adm" "dialout")
+FIX_LOCALE="true"
+DEFAULT_GROUPS=("sudo" "adm" "dialout" "plugdev" "render" "video")
 
 # --- Logging Helpers ---
 log_info() { printf "\033[1;36m[INFO]\033[0m %s\n" "$1"; }
@@ -31,6 +32,7 @@ Options:
   -u, --user <username>       Username to create or update
   -H, --hostname <hostname>   New system hostname to configure
   -n, --nopasswd              Enable passwordless sudo (NOPASSWD) for --user
+      --skip-locale           Skip en_US.UTF-8 locale verification
   -h, --help                  Show this help message and exit
 
 Example:
@@ -49,7 +51,7 @@ fi
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -u|--user)
-            if [[ -z "${2:-}" \vert{}\vert{} "${2:-}" == --* ]]; then
+            if [[ -z "${2:-}" || "${2:-}" == --* ]]; then
                 log_err "Option '$1' requires a username argument."
                 exit 1
             fi
@@ -57,7 +59,7 @@ while [[ $# -gt 0 ]]; do
             shift 2
             ;;
         -H|--hostname)
-            if [[ -z "${2:-}" \vert{}\vert{} "${2:-}" == --* ]]; then
+            if [[ -z "${2:-}" || "${2:-}" == --* ]]; then
                 log_err "Option '$1' requires a hostname argument."
                 exit 1
             fi
@@ -66,6 +68,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         -n|--nopasswd|--passwordless-sudo)
             NOPASSWD_SUDO="true"
+            shift
+            ;;
+        --skip-locale)
+            FIX_LOCALE="false"
             shift
             ;;
         -h|--help)
@@ -97,12 +103,29 @@ if [[ $EUID -ne 0 ]]; then
     fi
 fi
 
+export DEBIAN_FRONTEND=noninteractive
+
 # Ensure 'sudo' package itself is installed (minimal Debian images often omit it)
 if ! command -v sudo >/dev/null 2>&1; then
     log_info "Installing missing 'sudo' package..."
-    export DEBIAN_FRONTEND=noninteractive
     apt-get update -q && apt-get install -y sudo
     log_ok "Installed 'sudo'"
+fi
+
+# ==============================================================================
+# 0. UTF-8 LOCALE HYGIENE (Prevents macOS SSH LC_* Perl/APT warnings)
+# ==============================================================================
+if [[ "$FIX_LOCALE" == "true" ]]; then
+    if locale -a 2>/dev/null | grep -qi "en_US\.utf8"; then
+        log_skip "Locale en_US.UTF-8 is already generated"
+    else
+        log_info "Generating en_US.UTF-8 locale..."
+        apt-get update -q && apt-get install -y locales
+        sed -i 's/^# *en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
+        locale-gen en_US.UTF-8
+        update-locale LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+        log_ok "Configured en_US.UTF-8 locale"
+    fi
 fi
 
 # ==============================================================================
@@ -111,7 +134,6 @@ fi
 if [[ -n "$TARGET_USER" ]]; then
     log_info "Processing user configuration for '${TARGET_USER}'..."
 
-    # Validate POSIX username format
     if [[ ! "$TARGET_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
         log_err "Invalid POSIX username format: '${TARGET_USER}'"
         exit 1
@@ -122,7 +144,6 @@ if [[ -n "$TARGET_USER" ]]; then
         log_skip "User '${TARGET_USER}' already exists"
     else
         log_info "Creating user '${TARGET_USER}' (you will be prompted to set a password)..."
-        # --gecos "" bypasses interactive Full Name / Room Number / Phone prompts
         adduser --gecos "" "$TARGET_USER"
         log_ok "Created user '${TARGET_USER}'"
     fi
@@ -130,7 +151,7 @@ if [[ -n "$TARGET_USER" ]]; then
     # 1.2 Idempotent Group Membership Assignment
     for grp in "${DEFAULT_GROUPS[@]}"; do
         if getent group "$grp" >/dev/null 2>&1; then
-            if id -nG "$TARGET_USER" \vert{} tr ' ' '\n' \vert{} grep -qx "$grp"; then
+            if id -nG "$TARGET_USER" | tr ' ' '\n' | grep -qx "$grp"; then
                 log_skip "User '${TARGET_USER}' is already in group '${grp}'"
             else
                 usermod -aG "$grp" "$TARGET_USER"
@@ -149,15 +170,13 @@ if [[ "$NOPASSWD_SUDO" == "true" ]]; then
     SUDOERS_FILE="/etc/sudoers.d/010_${TARGET_USER}-nopasswd"
     SUDOERS_RULE="${TARGET_USER} ALL=(ALL) NOPASSWD: ALL"
 
-    # Check if the exact rule and 0440 permissions are already in place
-    if [[ -f "$SUDOERS_FILE" ]] && grep -qxF "$SUDOERS_RULE" "$SUDOERS_FILE" && [[ "$(stat -c "\%a" "$SUDOERS_FILE")" == "440" ]]; then
+    if [[ -f "$SUDOERS_FILE" ]] && grep -qxF "$SUDOERS_RULE" "$SUDOERS_FILE" && [[ "$(stat -c "%a" "$SUDOERS_FILE")" == "440" ]]; then
         log_skip "Passwordless sudo already active at ${SUDOERS_FILE}"
     else
         TMP_SUDO="$(mktemp)"
         echo "$SUDOERS_RULE" > "$TMP_SUDO"
         chmod 0440 "$TMP_SUDO"
 
-        # Validate syntax via visudo before moving into /etc/sudoers.d/
         if visudo -cf "$TMP_SUDO" >/dev/null 2>&1; then
             mv "$TMP_SUDO" "$SUDOERS_FILE"
             chown root:root "$SUDOERS_FILE"
@@ -190,4 +209,20 @@ if [[ -n "$TARGET_HOSTNAME" ]]; then
     fi
 
     # Idempotently update /etc/hosts (replaces old hostname or injects 127.0.1.1)
-    if grep -qE "[[:space:]]${TARGET_HOSTNAME}([[:space:]]\vert{}$)" /etc/hosts; then
+    if grep -qE "[[:space:]]${TARGET_HOSTNAME}([[:space:]]|$)" /etc/hosts; then
+        log_skip "'${TARGET_HOSTNAME}' is already mapped in /etc/hosts"
+    else
+        if [[ -n "$CURRENT_HOSTNAME" && "$CURRENT_HOSTNAME" != "localhost" ]] && grep -qE "[[:space:]]${CURRENT_HOSTNAME}([[:space:]]|$)" /etc/hosts; then
+            sed -i "s/\b${CURRENT_HOSTNAME}\b/${TARGET_HOSTNAME}/g" /etc/hosts
+            log_ok "Replaced '${CURRENT_HOSTNAME}' with '${TARGET_HOSTNAME}' in /etc/hosts"
+        elif grep -q "^127\.0\.1\.1" /etc/hosts; then
+            sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t${TARGET_HOSTNAME}/" /etc/hosts
+            log_ok "Updated 127.0.1.1 entry in /etc/hosts to '${TARGET_HOSTNAME}'"
+        else
+            printf "127.0.1.1\t%s\n" "$TARGET_HOSTNAME" >> /etc/hosts
+            log_ok "Appended '127.0.1.1 ${TARGET_HOSTNAME}' to /etc/hosts"
+        fi
+    fi
+fi
+
+log_info "Day-0 Debian bootstrap complete. Node is pregamed and ready for forge.sh."

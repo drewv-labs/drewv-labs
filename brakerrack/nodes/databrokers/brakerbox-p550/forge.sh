@@ -1,20 +1,23 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # DREW-V Labs // SiFive HiFive Premier P550 Data Broker Forge Script
-# Path: drewv-labs-toolkit/sifive-p550-databroker/forge/forge-node.sh
+# Path: drewv-labs/brakerrack/nodes/databrokers/brakerbox-p550/forge.sh
 # Architecture: RVA20 (RV64GC + Zba/Zbb) | 4x P550 3-Wide OoO | 32GB LPDDR5
 #
 # Usage:
-#   ./forge-node.sh                     # Standard idempotent P550 + NVMe + PG18 build
-#   ./forge-node.sh --with-raid         # Also provision/mount BigRed-WDR48 & LilBlu-WDB24
-#   ./forge-node.sh --force-wipe-nvme   # Destructively re-format NVMe & rebuild PG
-#   ./forge-node.sh --with-raid --force-wipe-raid # Destructively rebuild USB RAID10
+#   ./forge.sh                                 # Standard idempotent P550 + NVMe + PG18 build
+#   ./forge.sh --role bench                    # Set hostname to brakerbench-p550 (default: brakerbox-p550)
+#   ./forge.sh --with-raid                     # Also provision/mount BigRed-WDR48 & LilBlu-WDB24
+#   ./forge.sh --force-wipe-nvme               # Destructively re-format NVMe & rebuild PG
+#   ./forge.sh --with-raid --force-wipe-raid   # Destructively rebuild USB RAID10
 # ==============================================================================
 
 set -euo pipefail
 
 # --- Configuration Variables ---
-TARGET_HOSTNAME="${TARGET_HOSTNAME:-brakerbench-p550}"
+NODE_ROLE="${NODE_ROLE:-prod}"
+TARGET_HOSTNAME="${TARGET_HOSTNAME:-brakerbox-p550}"
+LAB_SUBNET="${LAB_SUBNET:-10.0.10.0/24}"
 NVME_DEV="${NVME_DEV:-/dev/nvme0n1}"
 MOUNT_POINT="${MOUNT_POINT:-/mnt/nvme_pgdata}"
 FS_LABEL="PGDATA_NVME"
@@ -37,14 +40,23 @@ WITH_RAID="false"
 FORCE_WIPE_NVME="false"
 FORCE_WIPE_RAID="false"
 
-for arg in "$@"; do
-    case "$arg" in
-        --with-raid)       WITH_RAID="true" ;;
-        --force-wipe-nvme) FORCE_WIPE_NVME="true" ;;
-        --force-wipe-raid) FORCE_WIPE_RAID="true" ;;
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --role)
+            NODE_ROLE="${2:-prod}"
+            if [[ "$NODE_ROLE" == "bench" ]]; then
+                TARGET_HOSTNAME="brakerbench-p550"
+            else
+                TARGET_HOSTNAME="brakerbox-p550"
+            fi
+            shift 2
+            ;;
+        --with-raid)       WITH_RAID="true"; shift ;;
+        --force-wipe-nvme) FORCE_WIPE_NVME="true"; shift ;;
+        --force-wipe-raid) FORCE_WIPE_RAID="true"; shift ;;
         *)
-            echo "Unknown option: $arg"
-            echo "Usage: $0 [--with-raid] [--force-wipe-nvme] [--force-wipe-raid]"
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--role prod|bench] [--with-raid] [--force-wipe-nvme] [--force-wipe-raid]"
             exit 1
             ;;
     esac
@@ -74,11 +86,11 @@ log_step "0. Pregame: Hostname, Power States, Headless Strip & Sysctls"
 CURRENT_HOSTNAME="$(hostname)"
 if [[ "$CURRENT_HOSTNAME" != "$TARGET_HOSTNAME" ]]; then
     hostnamectl set-hostname "$TARGET_HOSTNAME"
-    if ! grep -q "$TARGET_HOSTNAME" /etc/hosts; then
-        sed -i "s/127.0.1.1.*/127.0.1.1\t${TARGET_HOSTNAME}/g" /etc/hosts || true
-        grep -q "$TARGET_HOSTNAME" /etc/hosts || echo "127.0.1.1 ${TARGET_HOSTNAME}" >> /etc/hosts
+    if ! grep -qE "[[:space:]]${TARGET_HOSTNAME}([[:space:]]|$)" /etc/hosts; then
+        sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t${TARGET_HOSTNAME}/g" /etc/hosts || true
+        grep -qE "[[:space:]]${TARGET_HOSTNAME}([[:space:]]|$)" /etc/hosts || printf "127.0.1.1\t%s\n" "$TARGET_HOSTNAME" >> /etc/hosts
     fi
-    log_ok "Hostname set to ${TARGET_HOSTNAME}"
+    log_ok "Hostname set to ${TARGET_HOSTNAME} ( was ${CURRENT_HOSTNAME} )"
 else
     log_skip "Hostname is already ${TARGET_HOSTNAME}"
 fi
@@ -100,30 +112,7 @@ else
     log_skip "Sleep/suspend targets already masked"
 fi
 
-# 0.3 Install Core Packages & SiFive P550 PWM Fan Controller
-CORE_PKGS=(
-    fancontrol-config-p550-premier
-    mdadm lvm2 xfsprogs parted smartmontools nvme-cli
-    linux-tools-common linux-tools-generic sysstat iotop htop
-    jq curl ca-certificates gnupg lsb-release git build-essential
-)
-MISSING_PKGS=()
-for pkg in "${CORE_PKGS[@]}"; do
-    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
-        MISSING_PKGS+=("$pkg")
-    fi
-done
-
-if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
-    apt-get update -q
-    apt-get upgrade "${APT_FLAGS[@]}"
-    apt-get install "${APT_FLAGS[@]}" "${MISSING_PKGS[@]}"
-    log_ok "Installed core packages: ${MISSING_PKGS[*]}"
-else
-    log_skip "All core P550 & storage packages already installed"
-fi
-
-# 0.4 Set Default Boot Target to Headless Console
+# 0.3 Set Default Boot Target to Headless Console
 if [[ "$(systemctl get-default)" != "multi-user.target" ]]; then
     systemctl set-default multi-user.target
     log_ok "Boot target set to headless multi-user.target"
@@ -131,14 +120,15 @@ else
     log_skip "Boot target is already multi-user.target"
 fi
 
-# 0.5 Idempotent Snap & Desktop GUI Bloat Purge
-if command -v snap >/dev/null 2>&1 || dpkg -s snapd >/dev/null 2>&1; then
-    for s in firefox snap-store bare core22 gtk-common-themes gnome-42-2204 snapd; do
+# 0.4 Idempotent Snap & Desktop GUI Bloat Purge (BEFORE apt upgrade to avoid upgrading bloat)
+if command -v snap >/dev/null 2>&1 || dpkg -l snapd 2>/dev/null | grep -q "^ii"; then
+    # Remove leaf snaps before base snaps so dependencies don't block removal
+    for s in firefox snap-store gnome-42-2204 gtk-common-themes core22 bare snapd; do
         snap remove --purge "$s" 2>/dev/null || true
     done
     systemctl stop snapd.socket snapd.service 2>/dev/null || true
     apt-get purge "${APT_FLAGS[@]}" snapd 2>/dev/null || true
-    rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd /usr/lib/snapd ~/snap
+    rm -rf /snap /var/snap /var/lib/snapd /var/cache/snapd /usr/lib/snapd /root/snap /home/*/snap
     log_ok "Purged snapd and all snap packages"
 else
     log_skip "snapd already purged"
@@ -164,6 +154,29 @@ else
     log_skip "Desktop GUI & telemetry bloat already purged"
 fi
 
+# 0.5 Install Core Packages & SiFive P550 PWM Fan Controller
+CORE_PKGS=(
+    fancontrol-config-p550-premier
+    mdadm lvm2 xfsprogs parted smartmontools nvme-cli
+    linux-tools-common sysstat iotop htop
+    jq curl ca-certificates gnupg lsb-release git build-essential
+)
+MISSING_PKGS=()
+for pkg in "${CORE_PKGS[@]}"; do
+    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+        MISSING_PKGS+=("$pkg")
+    fi
+done
+
+if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+    apt-get update -q
+    apt-get upgrade "${APT_FLAGS[@]}"
+    apt-get install "${APT_FLAGS[@]}" "${MISSING_PKGS[@]}"
+    log_ok "Installed core packages: ${MISSING_PKGS[*]}"
+else
+    log_skip "All core P550 & storage packages already installed"
+fi
+
 # 0.6 Idempotent Sysctl Configuration (PMU Counters & Memory Writeback)
 SYSCTL_FILE="/etc/sysctl.d/90-brakerbox-broker.conf"
 SYSCTL_CONTENT="# Allow non-root perf sampling of P550 L1/PL2/CCACHE hardware counters
@@ -175,8 +188,8 @@ vm.swappiness = 10
 vm.dirty_background_ratio = 5
 vm.dirty_ratio = 15
 
-# Disable NMI watchdog interrupts to reduce CPU jitter
-kernel.nmi_watchdog = 0"
+# Disable NMI watchdog interrupts if supported by kernel architecture
+-kernel.nmi_watchdog = 0"
 
 if [[ ! -f "$SYSCTL_FILE" ]] || [[ "$(cat "$SYSCTL_FILE")" != "$SYSCTL_CONTENT" ]]; then
     echo "$SYSCTL_CONTENT" > "$SYSCTL_FILE"
@@ -211,7 +224,7 @@ else
             exit 1
         fi
 
-        LBA_4K_INDEX="$(nvme id-ns "$NVME_DEV" | awk '/lbads:12/ {print $2}' | tr -d ':' | head -n1)"
+        LBA_4K_INDEX="$(nvme id-ns "$NVME_DEV" | awk '/^lbaf.*lbads:12/ {print $2}' | tr -d ':' | head -n1)"
         if [[ -n "$LBA_4K_INDEX" ]]; then
             echo "Switching $NVME_DEV from ${CURRENT_LBA_SIZE}B to 4096B sectors (LBA Format Index: $LBA_4K_INDEX)..."
             nvme format "$NVME_DEV" -l "$LBA_4K_INDEX" -s 1 --force || nvme format "$NVME_DEV" -l "$LBA_4K_INDEX" --force
@@ -306,7 +319,7 @@ provision_usb_raid10() {
     if [[ -n "$existing_fs" && "$FORCE_WIPE_RAID" == "false" ]]; then
         log_skip "$array_name XFS volume '$fs_label' already exists on $existing_fs"
     else
-        # Auto-discover matching unmounted disks by byte capacity (avoids /dev/sdX order roulette)
+        # Auto-discover matching disks by byte capacity (avoids /dev/sdX order roulette)
         mapfile -t CANDIDATE_DISKS < <(
             lsblk -b -dn -o NAME,SIZE,TYPE | awk -v min="$min_bytes" -v max="$max_bytes" '
                 $3 == "disk" && $2 >= min && $2 <= max { print "/dev/"$1 }
@@ -327,9 +340,10 @@ provision_usb_raid10() {
             wipefs -a "$d"
         done
 
+        # --assume-clean prevents an 18-hour background resync over 5Gbps USB on freshly wiped drives
         mdadm --create "$md_dev" \
             --level=10 --raid-devices=4 \
-            --metadata=1.2 --bitmap=internal \
+            --metadata=1.2 --bitmap=internal --assume-clean \
             --name="$array_name" --run --force \
             "${CANDIDATE_DISKS[@]}"
 
@@ -368,12 +382,15 @@ if [[ "$WITH_RAID" == "true" ]]; then
 
     # Idempotently persist active mdadm array definitions into /etc/mdadm/mdadm.conf
     mkdir -p /etc/mdadm
-    if [[ -f /etc/mdadm/mdadm.conf ]]; then
-        sed -i '/^ARRAY /d' /etc/mdadm/mdadm.conf
+    MDADM_SCAN="$(mdadm --detail --scan)"
+    if ! grep -qF "$MDADM_SCAN" /etc/mdadm/mdadm.conf 2>/dev/null; then
+        sed -i '/^ARRAY /d' /etc/mdadm/mdadm.conf 2>/dev/null || true
+        echo "$MDADM_SCAN" >> /etc/mdadm/mdadm.conf
+        update-initramfs -u
+        log_ok "Updated /etc/mdadm/mdadm.conf and initramfs"
+    else
+        log_skip "/etc/mdadm/mdadm.conf already contains active array definitions"
     fi
-    mdadm --detail --scan >> /etc/mdadm/mdadm.conf
-    update-initramfs -u
-    log_ok "Updated /etc/mdadm/mdadm.conf and initramfs"
 else
     log_step "3B. SilverStone USB RAID Provisioning Skipped (Pass --with-raid to enable)"
 fi
@@ -422,11 +439,13 @@ NVME_PG_DATA="${NVME_PG_ROOT}/${PG_VERSION}/main"
 DEFAULT_PG_DATA="/var/lib/postgresql/${PG_VERSION}/main"
 CONF_DIR="/etc/postgresql/${PG_VERSION}/main/conf.d"
 DROPIN_CONF="${CONF_DIR}/99-brakerbox-p550.conf"
+PG_HBA="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
 
-rm -f "${CONF_DIR}/99-brakerbox-p550.conf"
+# Remove legacy typo config file if present (do NOT delete $DROPIN_CONF)
+rm -f "${CONF_DIR}/99-brackerbox-p550.conf"
 
 # 5.1 Idempotent Data Directory Migration
-if [[ -f "${NVME_PG_DATA}/PG_VERSION" ]]; then
+if [[ -f "${NVME_PG_DATA}/PG_VERSION" && "$FORCE_WIPE_NVME" == "false" ]]; then
     log_skip "PostgreSQL cluster already initialized on NVMe at ${NVME_PG_DATA}"
 else
     echo "Migrating initial PostgreSQL ${PG_VERSION} cluster to ${NVME_PG_DATA}..."
@@ -459,7 +478,7 @@ if [[ -x "$PG_BIN" ]] && ldd "$PG_BIN" | grep -q "liburing"; then
 fi
 log_ok "Selected PostgreSQL 18 Async I/O method: io_method = ${IO_METHOD}"
 
-# 5.3 Idempotent Drop-In Tuning File
+# 5.3 Idempotent Drop-In Tuning File & Lab Subnet pg_hba.conf Rule
 mkdir -p "$CONF_DIR"
 DESIRED_PG_CONF="# DREW-V Labs: SiFive HiFive Premier P550 (32GB LPDDR5 + WD_BLACK SN850X 4Kn)
 data_directory = '${NVME_PG_DATA}'
@@ -502,6 +521,14 @@ else
     log_skip "PostgreSQL configuration $DROPIN_CONF is already up to date"
 fi
 
+if [[ -f "$PG_HBA" ]] && ! grep -qF "$LAB_SUBNET" "$PG_HBA"; then
+    printf "\n# DREW-V Labs BrakerRack Subnet Access\nhost    all             all             %s            scram-sha-256\n" "$LAB_SUBNET" >> "$PG_HBA"
+    NEED_PG_RESTART="true"
+    log_ok "Added lab subnet ($LAB_SUBNET) rule to $PG_HBA"
+else
+    log_skip "Lab subnet ($LAB_SUBNET) already authorized in $PG_HBA"
+fi
+
 # 5.4 Ensure Service is Running & Healthy
 if ! systemctl is-active --quiet postgresql || [[ "$NEED_PG_RESTART" == "true" ]]; then
     systemctl enable postgresql >/dev/null 2>&1 || true
@@ -532,4 +559,4 @@ printf "  • PG 18 Async I/O    : io_method = %s\n" "$ACTIVE_IO_METHOD"
 printf "  • PG Shared Buffers  : %s\n" "$ACTIVE_BUFFERS"
 
 echo ""
-log_ok "BrakerBench-P550 PostgreSQL ${PG_VERSION} Forge Complete!"
+log_ok "${TARGET_HOSTNAME} PostgreSQL ${PG_VERSION} Forge Complete!"

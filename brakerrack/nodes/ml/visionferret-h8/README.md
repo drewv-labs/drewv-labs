@@ -1,7 +1,5 @@
 <div align="center">
 
-![DREW-V Labs](https://github.com/drewv-labs/drewv-labs-toolkit/blob/main/.github/images/drewv-labs-github-banner.png)  
-
 # VisionFerret-H8(L)
 
 *StarFive VisionFive 2 RISC-V Hailo-8(L) Edge AI/ML NPU Inference Engine*
