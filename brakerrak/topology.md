@@ -1,6 +1,6 @@
 <div align="center"> 
 
-# Systems Topology  
+# BrakerRak Topology  
 
 </div>
 
@@ -10,7 +10,7 @@ This doc serves as capacity plan for **DREW-V Labs** hardware builds supporting 
 
 ---
 
-## Part I: "Research Rack" Design
+## Part I: Design
 
 **Design Target Completion Date**: `2027-01-01`
 
