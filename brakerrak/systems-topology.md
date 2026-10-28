@@ -6,7 +6,7 @@
 
 *Updated: 2026-10-24*
 
-This doc serves as capacity plan for **DREW-V Labs** hardware builds supporting open RISC-V Edge ML & Data Brokering R&D. We leverage automated Astrophotography, in addition to other projects, to field test and harden system and software designs. The Astro Field Lab specifications are listed below.
+This doc serves as capacity plan for **DREW-V Labs** hardware builds supporting open RISC-V Edge ML & Data Brokering R&D. We leverage automated Astrophotography, in addition to other projects, to field test and harden system and software designs.
 
 ---
 
