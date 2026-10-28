@@ -109,15 +109,7 @@ sudo -v && ./ort-snapshot.py --stage day1-post-forge
 ```
 
 
-----
+---
 
-Made with ♥️ by
-```py
-DREW-V := {
-  "Simplicity in the Architecture",
-  "Efficiency in the Engineering",
-  "Purity in the Science",
-  "Audacity in the Art",
-  "Life in the Logic"
-}
-```
+**DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
+`Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`

@@ -83,15 +83,7 @@ U01 [                        Sodola Switch                          ]
 | `BrakerBench-Jupiter1` | 8x SpacemiT X60 (2-Wide In-Order @ 1.8 GHz) | `RVA22` (`RV64GCVB` + 256-bit `RVV 1.0`) | 32KB L1I/D, 2MB L2 (1MBx2) | PCIe Gen2 x2 (~800 MB/s) | Pass `mem=8G`, `maxcpus=4`, and pin `scaling_max_freq=1500000` to isolate `RVA22 + RVV 1.0` vs. `VF2` |
 
 
-----
+---
 
-Made with ♥️ by
-```py
-DREW-V := {
-  "Simplicity in the Architecture",
-  "Efficiency in the Engineering",
-  "Purity in the Science",
-  "Audacity in the Art",
-  "Life in the Logic"
-}
-```
+**DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
+`Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`

@@ -69,3 +69,9 @@ print(result)
 ```
 
 This code snippet demonstrates how to use the RISC-V Hailo-8(L) Edge AI NPU Inference Engine for image recognition. The `Hailo8LInferenceEngine` class simulates the engine's capabilities, including running inference on an image and simulating the processing time. The example shows how to create an instance of the engine and run inference on an image, simulating the detection of an object.
+
+
+---
+
+**DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
+`Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`
