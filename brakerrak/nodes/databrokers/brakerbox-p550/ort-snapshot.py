@@ -81,6 +81,15 @@ def sample_quiescent_metrics(duration_sec=5.0, interval_sec=0.5):
             if t_val and t_val.lstrip("-").isdigit():
                 thermals.setdefault(tz_name, []).append(round(int(t_val) / 1000.0, 2))
 
+        # Also read /sys/class/hwmon/hwmon*/temp*_input when thermal_zone* is empty/absent
+        for hp in sorted(glob.glob("/sys/class/hwmon/hwmon*/temp*_input")):
+            hw_dir = os.path.dirname(hp)
+            hw_name = read_sysfs(f"{hw_dir}/name") or os.path.basename(hw_dir)
+            lbl = read_sysfs(hp.replace("_input", "_label")) or os.path.basename(hp).replace("_input", "")
+            t_val = read_sysfs(hp)
+            if t_val and t_val.lstrip("-").isdigit():
+                thermals.setdefault(f"{hw_name}:{lbl}", []).append(round(int(t_val) / 1000.0, 2))
+
         # 3. Fan Tachometer RPM
         for fp in fan_paths:
             f_val = read_sysfs(fp)
@@ -291,7 +300,7 @@ def main():
     bus_errors = []
     if not dmesg_raw.startswith("ERROR:"):
         for line in dmesg_raw.splitlines():
-            if re.search(r"(pcieport.*error|AER|nvme.*error|I/O error|usb.*reset|under-voltage)", line, re.IGNORECASE):
+            if re.search(r"(pcieport.*error|AER:.*error|AER:.*Corrected|AER:.*Uncorrected|nvme.*error|I/O error|usb.*reset|under-voltage)", line, re.IGNORECASE):
                 bus_errors.append(line)
 
     # --- Users, Groups & Sudoers ---
