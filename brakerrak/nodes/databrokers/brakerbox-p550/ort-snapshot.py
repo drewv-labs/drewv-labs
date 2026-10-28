@@ -36,7 +36,7 @@ def run_cmd(cmd, use_sudo=False):
     if use_sudo and os.geteuid() != 0:
         cmd = ["sudo", "-n"] + cmd
     try:
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=15, check=False)
         return res.stdout.strip()
     except Exception as e:
         return f"ERROR: {e}"
@@ -181,7 +181,7 @@ def main():
     )
     args = parser.parse_args()
 
-    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_utc = datetime.datetime.now(datetime.UTC)
     epoch_sec = int(now_utc.timestamp())
     iso_compact = now_utc.strftime("%Y%m%dT%H%M%SZ")
     iso_full = now_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
