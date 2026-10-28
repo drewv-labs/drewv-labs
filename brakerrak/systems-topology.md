@@ -85,5 +85,9 @@ U01 [                        Sodola Switch                          ]
 
 ---
 
+<div align="center">
+
 **DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
 `Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`
+
+</div>

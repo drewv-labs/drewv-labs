@@ -34,3 +34,13 @@ nodes/                                → Node-specific provisioning scripts
     └── starfive-vf2-hailo8/          → StarFive VisionFive2 + Hailo-8(L)
         └── forge-visionferret-h8.sh  → Unified Hailo-8 & RISC-V provisioning engine
 ~~~
+
+
+---
+
+<div align="center">
+
+**DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
+`Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`
+
+</div>

@@ -73,5 +73,9 @@ This code snippet demonstrates how to use the RISC-V Hailo-8(L) Edge AI NPU Infe
 
 ---
 
+<div align="center">
+
 **DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
 `Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`
+
+</div>

@@ -1,7 +1,5 @@
 <div align="center">
 
-![DREW-V Labs](https://github.com/drewv-labs/drewv-labs-toolkit/blob/main/.github/images/drewv-labs-github-banner.png) 
-
 # BrakerBox-Titan  
 
 *Milk-V Titan RISC-V High Throughput PostgreSQL Edge Data Broker*
@@ -17,3 +15,13 @@
 * 10GbE SFP
 * NIC
 * Onboard BMC
+
+
+---
+
+<div align="center">
+
+**DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
+`Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`
+
+</div>
