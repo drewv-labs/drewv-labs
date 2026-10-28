@@ -28,38 +28,6 @@
 | Subsystem | Specification | Notes |
 | :--- | :--- | :--- |
 | **Board / SoC** | SiFive HiFive Premier P550 (`ESWIN EIC7700X`) | Mini-DTX (`203mm × 170mm`), STM32 Out-of-Band BMC |
-
-
-<div align="center">
-
-# BrakerBox-P550 | BrakerBench-P550  
-
-*SiFive HiFive Premier P550 Data Broker*
-
-![HiFive Premier P550](https://raw.githubusercontent.com/brakerrak/nodes/databrokers/brakerbox-p550/assets/sifive-hifive-premier-p550-sn850x-server-layout.jpg)  
-
-</div>
-
-**Rack Location:** `BrackerRack U10; target=U04`   
-**Primary Role:** Interim Production Data Broker (`brakerbox-p550`) & 3-Wide Out-of-Order RVA20 Benchmark Target (`brakerbench-p550`)  
-**Ecosystem:** `DREW-V Labs` // `BrakerRack` & `HamStack` (`CarrierPigeons` Wrapper)
-
----
-
-## 1. Architectural Overview
-
-`brakerbox-p550` is a 1U rackmount RISC-V data broker built around the **SiFive HiFive Premier P550** (`HF106-001`) Mini-DTX platform. Within the `BrakerRack` matrix, it serves two functions:
-
-1. **Interim Production Data Broker (`--role prod`):** Hosts **PostgreSQL 18** (`PigeonCoop` Continuous Telemetric Documentation ledger), MQTT ingestion, and tiered storage pools while `brakerbox-titan` is on backorder.
-2. **Microarchitectural Benchmark Target (`--role bench`):** Provides a **13-stage, triple-issue, Out-of-Order (OoO)** `RVA20` (`RV64GC` + `Zba`/`Zbb`) reference pipeline with 4MB of coherent L3 cache to benchmark against the 8-stage, dual-issue **In-Order** `SiFive U74` (`brakerbench-vf2`) and 4-wide OoO architectures.
-
----
-
-## 2. Hardware & 1U Mechanical Packaging
-
-| Subsystem | Specification | Notes |
-| :--- | :--- | :--- |
-| **Board / SoC** | SiFive HiFive Premier P550 (`ESWIN EIC7700X`) | Mini-DTX (`203mm × 170mm`), STM32 Out-of-Band BMC |
 | **CPU Complex** | 4x SiFive Performance P550 Cores @ 1.4GHz | 13-stage, 3-Wide OoO, `rv64imafdc_zicsr_zifencei_zba_zbb` |
 | **Cache Hierarchy** | 32KB L1I + 32KB L1D / 256KB Private L2 / 4MB Shared L3 | SECDED ECC on L3 Cache |
 | **System Memory** | 32GB LPDDR5-6400 | Soldered on SOM |
