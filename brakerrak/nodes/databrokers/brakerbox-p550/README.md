@@ -1,6 +1,6 @@
 <div align="center">
 
-# BrakerBox-P550 | BrakerBench-P550  
+# BrakerBox-P550 
 
 *SiFive HiFive Premier P550 Data Broker*
 
