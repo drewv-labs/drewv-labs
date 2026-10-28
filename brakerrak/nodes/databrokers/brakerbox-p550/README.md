@@ -108,4 +108,16 @@ Capture the converged system state (recording the package delta, active `4096B` 
 sudo -v && ./ort-snapshot.py --stage day1-post-forge
 ```
 
----
+
+----
+
+Made with ♥️ by
+```py
+DREW-V := {
+  "Simplicity in the Architecture",
+  "Efficiency in the Engineering",
+  "Purity in the Science",
+  "Audacity in the Art",
+  "Life in the Logic"
+}
+```
