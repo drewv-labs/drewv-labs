@@ -1,6 +1,6 @@
 <div align="center">
 
-# **DREW-V LABS** // Drew Vandagriff 
+# Drew Vandagriff // **DREW-V LABS**
 
 *Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic*
 
