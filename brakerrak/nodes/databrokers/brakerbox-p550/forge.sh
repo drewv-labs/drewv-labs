@@ -360,7 +360,7 @@ provision_usb_raid10() {
             udevadm settle
             log_ok "Created and formatted $array_name ($md_dev) with XFS label '$fs_label'"
         else
-            log_warn "Kernel lacks md_mod; building native Btrfs RAID 10 (-d raid10 -m raid10) across: ${CANDIDATE_DISKS[*]}"
+            echo "  [INFO] Using native kernel Btrfs RAID 10 (-d raid10 -m raid10) across: ${CANDIDATE_DISKS[*]}"
             for d in "${CANDIDATE_DISKS[@]}"; do
                 wipefs -a "$d"
             done
@@ -372,8 +372,9 @@ provision_usb_raid10() {
     fi
 
     mkdir -p "$mount_pt"
-    local fs_type
-    fs_type="$(blkid -s TYPE -o value -L "$fs_label" 2>/dev/null || echo "btrfs")"
+    local dev_node fs_type
+    dev_node="$(blkid -L "$fs_label" 2>/dev/null || true)"
+    fs_type="$(blkid -s TYPE -o value "$dev_node" 2>/dev/null || echo "btrfs")"
     local raid_fstab
     if [[ "$fs_type" == "btrfs" ]]; then
         raid_fstab="LABEL=${fs_label}  ${mount_pt}  btrfs  defaults,noatime,compress=zstd:1,nofail,x-systemd.device-timeout=15s  0  0"
