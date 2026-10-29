@@ -6,9 +6,7 @@
 
 ## About  
 
-Located in North Texas, Independent Researcher **DREW-V Labs** is focused on the development of a RISC-V based Edge ML and Data Brokering R&D.
-
-This repo contains various tools, utilities, and subprojects for core Lab operation.
+Located in North Texas, Independent Researcher **DREW-V Labs** is focused on RISC-V Edge ML and Data Engineering R&D.
 
 ---
 
@@ -18,7 +16,7 @@ This repo contains various tools, utilities, and subprojects for core Lab operat
 
 <div align="center">
 
-**DREW-V LABS** // **Drew Vandagriff** — *Richardson, TX*  
+**DREW-V LABS** // **Drew Vandagriff** — *Dallas, TX*  
 `Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic`
 
 </div>
