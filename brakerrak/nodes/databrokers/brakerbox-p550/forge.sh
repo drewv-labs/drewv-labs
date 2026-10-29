@@ -5,14 +5,31 @@
 # Architecture: RVA20 (RV64GC + Zba/Zbb) | 4x P550 3-Wide OoO | 32GB LPDDR5
 #
 # Usage:
-#   ./forge.sh                                 # Standard idempotent P550 + NVMe + PG18 build
+#   ./forge.sh                                 # Standard idempotent P550 + NVMe + PG18 build (RAID skipped)
 #   ./forge.sh --role bench                    # Set hostname to brakerbench-p550 (default: brakerbox-p550)
 #   ./forge.sh --with-raid                     # Also provision/mount BigRed-WDR48 & LilBlu-WDB24
-#   ./forge.sh --force-wipe-nvme               # Destructively re-format NVMe & rebuild PG
-#   ./forge.sh --with-raid --force-wipe-raid   # Destructively rebuild USB RAID10
+#   ./forge.sh --force-wipe-nvme               # Destructively 4Kn format NVMe & zero-cache rebuild PG18
+#   ./forge.sh --with-raid --force-wipe-raid   # Destructively rebuild USB RAID10 arrays
+#   ./forge.sh --force-rebuild-pg              # Force zero-cache PGDG deb-src recompile with perf stat
 # ==============================================================================
 
-set -euo pipefail
+set -Eeuo pipefail
+
+# --- Fail-Fast Error Trap ---
+trap_err() {
+    local exit_code=$?
+    local line_no=$1
+    printf "\n\033[1;31m[FATAL] Forge failed at line %s (exit code: %s)\033[0m\n" "$line_no" "$exit_code" >&2
+    printf "\033[1;31m[CMD]   %s\033[0m\n" "${BASH_COMMAND}" >&2
+    exit "$exit_code"
+}
+trap 'trap_err ${LINENO}' ERR
+
+# Ensure script runs as root BEFORE shifting CLI arguments
+if [[ $EUID -ne 0 ]]; then
+    echo "Re-executing with sudo..."
+    exec sudo -E bash "$0" "$@"
+fi
 
 # --- Configuration Variables ---
 NODE_ROLE="${NODE_ROLE:-prod}"
@@ -26,7 +43,7 @@ VG_NAME="vg_braker"
 LV_NAME="lv_pgdata"
 PG_VERSION="${PG_VERSION:-18}"
 
-# SilverStone USB 3.0 RAID 10 Configuration (BigRed-WDR48 & LilBlu-WDB24)
+# SilverStone USB 3.2 Gen 1 RAID 10 Configuration (BigRed-WDR48 & LilBlu-WDB24)
 BIGRED_MD="/dev/md/bigred"
 BIGRED_LABEL="BIGRED_VAULT"
 BIGRED_MOUNT="/mnt/bigred_wdr48"
@@ -39,6 +56,8 @@ LILBLU_MOUNT="/mnt/lilblu_wdb24"
 WITH_RAID="false"
 FORCE_WIPE_NVME="false"
 FORCE_WIPE_RAID="false"
+FORCE_REBUILD_PG="false"
+USE_PKG_CACHE="false"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -51,12 +70,18 @@ while [[ $# -gt 0 ]]; do
             fi
             shift 2
             ;;
-        --with-raid)       WITH_RAID="true"; shift ;;
-        --force-wipe-nvme) FORCE_WIPE_NVME="true"; shift ;;
-        --force-wipe-raid) FORCE_WIPE_RAID="true"; shift ;;
+        --with-raid)        WITH_RAID="true"; shift ;;
+        --force-wipe-nvme)  FORCE_WIPE_NVME="true"; FORCE_REBUILD_PG="true"; shift ;;
+        --force-wipe-raid)  FORCE_WIPE_RAID="true"; shift ;;
+        --force-rebuild-pg) FORCE_REBUILD_PG="true"; shift ;;
+        --use-pkg-cache)    USE_PKG_CACHE="true"; shift ;;
+        -h|--help)
+            echo "Usage: $0 [--role prod|bench] [--with-raid] [--force-wipe-nvme] [--force-wipe-raid] [--force-rebuild-pg] [--use-pkg-cache]"
+            exit 0
+            ;;
         *)
             echo "Unknown option: $1"
-            echo "Usage: $0 [--role prod|bench] [--with-raid] [--force-wipe-nvme] [--force-wipe-raid]"
+            echo "Usage: $0 [--role prod|bench] [--with-raid] [--force-wipe-nvme] [--force-wipe-raid] [--force-rebuild-pg] [--use-pkg-cache]"
             exit 1
             ;;
     esac
@@ -70,12 +95,6 @@ log_step() { printf "\n\033[1;36m=== [%s] %s ===\033[0m\n" "$(date +%H:%M:%S)" "
 log_ok()   { printf "\033[1;32m  [OK]\033[0m %s\n" "$1"; }
 log_skip() { printf "\033[1;33m[SKIP]\033[0m %s (already configured)\n" "$1"; }
 log_warn() { printf "\033[1;31m[WARN]\033[0m %s\n" "$1"; }
-
-# Ensure script runs as root or via sudo
-if [[ $EUID -ne 0 ]]; then
-   echo "Re-executing with sudo..."
-   exec sudo -E bash "$0" "$@"
-fi
 
 # ==============================================================================
 # STAGE 0: Hostname, Sleep Masking, Headless Strip & Sysctl Tuning
@@ -153,11 +172,11 @@ else
     log_skip "Desktop GUI & telemetry bloat already purged"
 fi
 
-# 0.5 Install Core Packages & SiFive P550 PWM Fan Controller
+# 0.5 Install Core Packages, Perf Tools & SiFive P550 PWM Fan Controller
 CORE_PKGS=(
     fancontrol-config-p550-premier
-    mdadm lvm2 xfsprogs btrfs-progs parted smartmontools nvme-cli
-    linux-tools-common sysstat iotop htop
+    mdadm lvm2 xfsprogs btrfs-progs parted smartmontools nvme-cli hdparm
+    linux-tools-common linux-tools-generic sysstat iotop htop bc rsync time
     jq curl ca-certificates gnupg lsb-release git build-essential
 )
 MISSING_PKGS=()
@@ -171,21 +190,34 @@ if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
     apt-get update -q
     apt-get upgrade "${APT_FLAGS[@]}"
     apt-get install "${APT_FLAGS[@]}" "${MISSING_PKGS[@]}"
+    apt-get install "${APT_FLAGS[@]}" "linux-tools-$(uname -r)" 2>/dev/null || true
     log_ok "Installed core packages: ${MISSING_PKGS[*]}"
 else
     log_skip "All core P550 & storage packages already installed"
 fi
 
-# 0.6 Idempotent Sysctl Configuration (PMU Counters & Memory Writeback)
+# Ensure postgres group exists early for hugetlb_shm_group sysctl
+if ! getent group postgres >/dev/null; then
+    groupadd -r -g 26 postgres || groupadd -r postgres
+fi
+PG_GID="$(getent group postgres | cut -d: -f3)"
+
+# 0.6 Idempotent Sysctl Configuration (PMU Counters, 2MB Sv39 HugePages & Writeback)
 SYSCTL_FILE="/etc/sysctl.d/90-brakerbox-broker.conf"
 SYSCTL_CONTENT="# Allow non-root perf sampling of P550 L1/PL2/CCACHE hardware counters
 kernel.perf_event_paranoid = -1
 kernel.kptr_restrict = 0
 
-# Broker memory & dirty page writeback tuning
-vm.swappiness = 10
-vm.dirty_background_ratio = 5
-vm.dirty_ratio = 15
+# 2MB Sv39 HugePages for 8GB PostgreSQL shared_buffers (4608 * 2MB = 9GB)
+vm.nr_hugepages = 4608
+vm.hugetlb_shm_group = ${PG_GID}
+
+# Broker memory, scheduler stickiness & dirty page writeback tuning
+vm.swappiness = 1
+vm.dirty_background_bytes = 67108864
+vm.dirty_bytes = 536870912
+-kernel.sched_migration_cost_ns = 5000000
+-kernel.sched_autogroup_enabled = 0
 
 # Disable NMI watchdog interrupts if supported by kernel architecture
 -kernel.nmi_watchdog = 0"
@@ -193,7 +225,7 @@ vm.dirty_ratio = 15
 if [[ ! -f "$SYSCTL_FILE" ]] || [[ "$(cat "$SYSCTL_FILE")" != "$SYSCTL_CONTENT" ]]; then
     echo "$SYSCTL_CONTENT" > "$SYSCTL_FILE"
     sysctl --system >/dev/null
-    log_ok "Applied P550 PMU & broker sysctl parameters ($SYSCTL_FILE)"
+    log_ok "Applied P550 PMU, 2MB HugePages & broker sysctl parameters ($SYSCTL_FILE)"
 else
     log_skip "Sysctl parameters in $SYSCTL_FILE already up to date"
 fi
@@ -208,14 +240,33 @@ if [[ ! -b "$NVME_DEV" ]]; then
     exit 1
 fi
 
+ROOT_DEV="$(findmnt -n -o SOURCE /)"
+if [[ "$ROOT_DEV" == "${NVME_DEV}"* ]]; then
+    log_warn "Root filesystem (/) is mounted on $NVME_DEV ($ROOT_DEV)! Boot from eMMC before wiping NVMe."
+    exit 1
+fi
+
 NVME_SHORT="$(basename "$NVME_DEV")"
 CURRENT_LBA_SIZE="$(cat "/sys/block/${NVME_SHORT}/queue/logical_block_size")"
 EXISTING_FS_DEV="$(blkid -L "$FS_LABEL" || true)"
 
+if [[ "$FORCE_WIPE_NVME" == "true" ]]; then
+    log_warn "--force-wipe-nvme requested: stopping PostgreSQL and tearing down NVMe mounts/LVM..."
+    systemctl stop postgresql 2>/dev/null || true
+    pkill -9 -u postgres 2>/dev/null || true
+    umount -f "$MOUNT_POINT" 2>/dev/null || true
+    if vgs "$VG_NAME" >/dev/null 2>&1; then
+        lvchange -an "$VG_NAME" 2>/dev/null || true
+        vgremove -ff -y "$VG_NAME" 2>/dev/null || true
+    fi
+    pvremove -ff -y "${NVME_DEV}"* 2>/dev/null || true
+    wipefs -a "$NVME_DEV"
+fi
+
 if [[ -n "$EXISTING_FS_DEV" && "$FORCE_WIPE_NVME" == "false" ]]; then
     log_skip "Existing filesystem labeled '$FS_LABEL' found on $EXISTING_FS_DEV (Logical sector size: ${CURRENT_LBA_SIZE}B)"
 else
-    if [[ "$CURRENT_LBA_SIZE" == "4096" ]]; then
+    if [[ "$CURRENT_LBA_SIZE" == "4096" && "$FORCE_WIPE_NVME" == "false" ]]; then
         log_skip "$NVME_DEV is already formatted to native 4096-byte (4Kn) sectors"
     else
         if lsblk -no MOUNTPOINT "$NVME_DEV" | grep -q "/"; then
@@ -225,13 +276,13 @@ else
 
         LBA_4K_INDEX="$(nvme id-ns "$NVME_DEV" | awk '/^lbaf.*lbads:12/ {print $2}' | tr -d ':' | head -n1)"
         if [[ -n "$LBA_4K_INDEX" ]]; then
-            echo "Switching $NVME_DEV from ${CURRENT_LBA_SIZE}B to 4096B sectors (LBA Format Index: $LBA_4K_INDEX)..."
+            echo "Formatting $NVME_DEV to 4096B native sectors (LBA Format Index: $LBA_4K_INDEX, SES=1)..."
             nvme format "$NVME_DEV" -l "$LBA_4K_INDEX" -s 1 --force || nvme format "$NVME_DEV" -l "$LBA_4K_INDEX" --force
             partprobe "$NVME_DEV" || true
             udevadm settle
             sleep 2
             NEW_LBA_SIZE="$(cat "/sys/block/${NVME_SHORT}/queue/logical_block_size")"
-            log_ok "$NVME_DEV formatted to ${NEW_LBA_SIZE}-byte native sectors"
+            log_ok "$NVME_DEV hardware formatted to ${NEW_LBA_SIZE}-byte native 4Kn sectors"
         else
             log_warn "Could not auto-detect 4K LBA index on $NVME_DEV; keeping ${CURRENT_LBA_SIZE}B sectors"
         fi
@@ -250,15 +301,15 @@ if [[ -n "$EXISTING_FS_DEV" && "$FORCE_WIPE_NVME" == "false" ]]; then
     log_skip "XFS volume '$FS_LABEL' already exists at $TARGET_BLOCK_DEV"
 else
     log_warn "Creating fresh storage layout on $NVME_DEV..."
-    umount "$MOUNT_POINT" 2>/dev/null || true
+    umount -f "$MOUNT_POINT" 2>/dev/null || true
 
     if [[ "$USE_LVM" == "true" ]]; then
-        vgremove -f "$VG_NAME" 2>/dev/null || true
-        pvremove -f "$NVME_DEV" 2>/dev/null || true
+        vgremove -ff -y "$VG_NAME" 2>/dev/null || true
+        pvremove -ff -y "$NVME_DEV" 2>/dev/null || true
         wipefs -a "$NVME_DEV"
 
         pvcreate --dataalignment 4m -f -y "$NVME_DEV"
-        vgcreate "$VG_NAME" "$NVME_DEV"
+        vgcreate -s 4m "$VG_NAME" "$NVME_DEV"
         # Allocate 85% of VG, leaving 15% free for instant benchmark LVM snapshots
         lvcreate -l 85%VG -n "$LV_NAME" -y "$VG_NAME"
         TARGET_BLOCK_DEV="/dev/${VG_NAME}/${LV_NAME}"
@@ -282,7 +333,7 @@ fi
 
 mkdir -p "$MOUNT_POINT"
 
-FSTAB_ENTRY="LABEL=${FS_LABEL}  ${MOUNT_POINT}  xfs  rw,noatime,nodiratime,logbsize=256k,nofail,x-systemd.device-timeout=15s  0  2"
+FSTAB_ENTRY="LABEL=${FS_LABEL}  ${MOUNT_POINT}  xfs  rw,noatime,nodiratime,attr2,inode64,logbsize=256k,noquota,nofail,x-systemd.device-timeout=15s  0  2"
 if ! grep -q "LABEL=${FS_LABEL}" /etc/fstab && ! grep -q "[[:space:]]${MOUNT_POINT}[[:space:]]" /etc/fstab; then
     echo "$FSTAB_ENTRY" >> /etc/fstab
     systemctl daemon-reload
@@ -300,7 +351,7 @@ fi
 
 # ==============================================================================
 # STAGE 3B: Optional SilverStone USB RAID 10 (BigRed-WDR48 & LilBlu-WDB24)
-# Supports mdadm RAID10+XFS (if md_mod present) or native Btrfs RAID10 fallback
+# Only runs when --with-raid is explicitly passed!
 # ==============================================================================
 HAS_MD_MOD="false"
 if modprobe md_mod 2>/dev/null || [[ -d /sys/module/md_mod ]]; then
@@ -331,17 +382,17 @@ provision_usb_raid10() {
         log_skip "$array_name volume '$fs_label' already exists on $existing_fs"
     else
         mapfile -t CANDIDATE_DISKS < <(
-            lsblk -b -dn -o NAME,SIZE,TYPE | awk -v min="$min_bytes" -v max="$max_bytes" '
-                $3 == "disk" && $2 >= min && $2 <= max { print "/dev/"$1 }
+            lsblk -b -dn -o NAME,SIZE,ROTA,TYPE | awk -v min="$min_bytes" -v max="$max_bytes" '
+                $4 == "disk" && $3 == "1" && $2 >= min && $2 <= max { print "/dev/"$1 }
             '
         )
 
         if [[ ${#CANDIDATE_DISKS[@]} -ne 4 ]]; then
-            log_warn "$array_name skipped: Expected 4 individual disks in Clear RAID mode, found ${#CANDIDATE_DISKS[@]} (${CANDIDATE_DISKS[*]:-none})."
+            log_warn "$array_name skipped: Expected 4 rotational disks in Clear RAID mode, found ${#CANDIDATE_DISKS[@]} (${CANDIDATE_DISKS[*]:-none})."
             return 0
         fi
 
-        umount "$mount_pt" 2>/dev/null || true
+        umount -f "$mount_pt" 2>/dev/null || true
 
         if [[ "$HAS_MD_MOD" == "true" ]]; then
             log_warn "Building $array_name mdadm RAID 10 + XFS across 4 drives: ${CANDIDATE_DISKS[*]}"
@@ -377,9 +428,9 @@ provision_usb_raid10() {
     fs_type="$(blkid -s TYPE -o value "$dev_node" 2>/dev/null || echo "btrfs")"
     local raid_fstab
     if [[ "$fs_type" == "btrfs" ]]; then
-        raid_fstab="LABEL=${fs_label}  ${mount_pt}  btrfs  defaults,noatime,compress=zstd:1,nofail,x-systemd.device-timeout=15s  0  0"
+        raid_fstab="LABEL=${fs_label}  ${mount_pt}  btrfs  defaults,noatime,compress=zstd:1,space_cache=v2,autodefrag,nofail,x-systemd.device-timeout=30s  0  0"
     else
-        raid_fstab="LABEL=${fs_label}  ${mount_pt}  xfs  defaults,noatime,nodiratime,nofail,x-systemd.device-timeout=15s  0  2"
+        raid_fstab="LABEL=${fs_label}  ${mount_pt}  xfs  defaults,noatime,nodiratime,nofail,x-systemd.device-timeout=30s  0  2"
     fi
 
     if ! grep -q "LABEL=${fs_label}" /etc/fstab; then
@@ -401,7 +452,14 @@ provision_usb_raid10() {
 if [[ "$WITH_RAID" == "true" ]]; then
     log_step "3B. Provisioning SilverStone USB RAID 10 Arrays (BigRed-WDR48 & LilBlu-WDB24)"
 
-    # BigRed-WDR48: 4x 12TB WD Red (~12,000,138,625,024 bytes -> match 11TB to 13TB)
+    # Lock USB 3.2 mass-storage link power management and rotational mq-deadline scheduler
+    cat << 'EOF' > /etc/udev/rules.d/99-brakerrak-usb-raid.rules
+ACTION=="add", SUBSYSTEM=="usb", ATTR{bInterfaceClass}=="08", ATTR{power/control}="on", ATTR{power/autosuspend_delay_ms}="-1"
+ACTION=="add|change", KERNEL=="sd[a-z]", ATTR{queue/rotational}=="1", ATTR{queue/scheduler}="mq-deadline"
+EOF
+    udevadm control --reload-rules && udevadm trigger
+
+    # BigRed-WDR48: 4x 12TB WD Red Plus (~12,000,138,625,024 bytes -> match 11TB to 13TB)
     provision_usb_raid10 "bigred" "$BIGRED_MD" "$BIGRED_LABEL" "$BIGRED_MOUNT" 11000000000000 13000000000000
 
     # LilBlu-WDB24: 4x 6TB WD Blue (~6,001,175,126,016 bytes -> match 5.5TB to 6.5TB)
@@ -410,7 +468,7 @@ if [[ "$WITH_RAID" == "true" ]]; then
     if [[ "$HAS_MD_MOD" == "true" ]]; then
         mkdir -p /etc/mdadm
         MDADM_SCAN="$(mdadm --detail --scan)"
-        if ! grep -qF "$MDADM_SCAN" /etc/mdadm/mdadm.conf 2>/dev/null; then
+        if [[ -n "$MDADM_SCAN" ]] && ! grep -qF "$MDADM_SCAN" /etc/mdadm/mdadm.conf 2>/dev/null; then
             sed -i '/^ARRAY /d' /etc/mdadm/mdadm.conf 2>/dev/null || true
             echo "$MDADM_SCAN" >> /etc/mdadm/mdadm.conf
             update-initramfs -u
@@ -424,9 +482,9 @@ else
 fi
 
 # ==============================================================================
-# STAGE 4: Installing PostgreSQL $PG_VERSION (PGDG Ubuntu Noble riscv64)
+# STAGE 4: Zero-Cache Forge of PostgreSQL $PG_VERSION (PGDG deb-src + perf stat)
 # ==============================================================================
-log_step "4. Installing PostgreSQL ${PG_VERSION} (PGDG riscv64 + SiFive P550 Zba/Zbb)"
+log_step "4. Forging PostgreSQL ${PG_VERSION} (PGDG riscv64 + SiFive P550 Zba/Zbb + perf stat)"
 
 PGDG_KEY="/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc"
 PGDG_LIST="/etc/apt/sources.list.d/pgdg.list"
@@ -435,6 +493,10 @@ CODENAME="$(lsb_release -cs)"
 LOCAL_REPO_DIR="/opt/drewv-pgdg-riscv64/debs"
 NVME_CACHE_DIR="${MOUNT_POINT}/.pkg-cache/pgdg-riscv64"
 BUILD_DIR="/opt/drewv-pgdg-riscv64/build"
+TELEMETRY_DIR="${MOUNT_POINT}/telemetry/forge"
+RUN_TS="$(date -u +%Y%m%dT%H%M%SZ)"
+
+mkdir -p "$TELEMETRY_DIR" "$LOCAL_REPO_DIR"
 
 if [[ ! -f "$PGDG_KEY" ]]; then
     install -d /usr/share/postgresql-common/pgdg
@@ -450,6 +512,7 @@ deb-src [signed-by=${PGDG_KEY}] https://apt.postgresql.org/pub/repos/apt ${CODEN
 
 if [[ ! -f "$PGDG_LIST" ]] || [[ "$(cat "$PGDG_LIST")" != "$EXPECTED_REPO" ]]; then
     echo "$EXPECTED_REPO" > "$PGDG_LIST"
+    rm -f "$LOCAL_LIST" 2>/dev/null || true
     apt-get update -q
     log_ok "Configured PGDG binary + deb-src repositories for ${CODENAME}-pgdg"
 else
@@ -462,37 +525,44 @@ update_local_pgdg_repo() {
     apt-get update -o Acquire::GzipIndexes=false -q
 }
 
-mkdir -p "$LOCAL_REPO_DIR" "$NVME_CACHE_DIR"
-
-# Sync any newly built .debs between /opt and NVMe persistent cache
-if ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1 && \
-   ! ls "${NVME_CACHE_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
-    cp -a "${LOCAL_REPO_DIR}"/*.deb "$NVME_CACHE_DIR/" || true
-    log_ok "Backed up compiled P550 PostgreSQL ${PG_VERSION} .deb packages to NVMe ($NVME_CACHE_DIR)"
-elif ! ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1 && \
-     ls "${NVME_CACHE_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
-    cp -a "${NVME_CACHE_DIR}"/*.deb "$LOCAL_REPO_DIR/"
-    log_ok "Restored cached P550 PostgreSQL ${PG_VERSION} .deb packages from NVMe"
-fi
-
-if dpkg -s "postgresql-${PG_VERSION}" >/dev/null 2>&1; then
-    log_skip "postgresql-${PG_VERSION} is already installed"
+if dpkg -s "postgresql-${PG_VERSION}" >/dev/null 2>&1 && [[ "$FORCE_REBUILD_PG" == "false" ]]; then
+    log_skip "postgresql-${PG_VERSION} is already installed (pass --force-rebuild-pg to recompile from scratch)"
 else
-    if ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
+    # Handle cache seeding vs. zero-cache purge only when installing or rebuilding
+    if [[ "$FORCE_REBUILD_PG" == "true" ]]; then
+        log_warn "Purging existing postgresql-${PG_VERSION} installation and .deb caches for zero-cache forge..."
+        systemctl stop postgresql 2>/dev/null || true
+        apt-get purge "${APT_FLAGS[@]}" "postgresql-${PG_VERSION}" "postgresql-client-${PG_VERSION}" 2>/dev/null || true
+        rm -rf "${LOCAL_REPO_DIR:?}"/postgresql-${PG_VERSION}_*.deb "${LOCAL_REPO_DIR:?}"/postgresql-client-${PG_VERSION}_*.deb "${NVME_CACHE_DIR:?}" "${BUILD_DIR:?}" "$LOCAL_LIST" 2>/dev/null || true
+        apt-get update -q
+    elif [[ "$USE_PKG_CACHE" == "true" ]]; then
+        mkdir -p "$NVME_CACHE_DIR"
+        if ! ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1 && \
+           ls "${NVME_CACHE_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
+            cp -a "${NVME_CACHE_DIR}"/*.deb "$LOCAL_REPO_DIR/"
+            log_ok "Restored cached P550 PostgreSQL ${PG_VERSION} .deb packages from NVMe (--use-pkg-cache)"
+        fi
+    else
+        # Default zero-cache policy for fresh installs: do not use cached PG18 debs
+        rm -rf "${LOCAL_REPO_DIR:?}"/postgresql-${PG_VERSION}_*.deb "${LOCAL_REPO_DIR:?}"/postgresql-client-${PG_VERSION}_*.deb "$LOCAL_LIST" 2>/dev/null || true
+    fi
+
+    if [[ "$USE_PKG_CACHE" == "true" ]] && ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
         update_local_pgdg_repo
-        log_skip "Found cached P550-optimized postgresql-${PG_VERSION} .deb packages in $LOCAL_REPO_DIR"
-    elif ! apt-cache show "postgresql-${PG_VERSION}" >/dev/null 2>&1; then
-        log_warn "No upstream riscv64 binary in ${CODENAME}-pgdg; compiling P550-tuned (${PG_VERSION}) from PGDG deb-src..."
+        log_skip "Using cached P550-optimized postgresql-${PG_VERSION} .deb packages in $LOCAL_REPO_DIR"
+    else
+        log_warn "Compiling zero-cache P550-tuned postgresql-${PG_VERSION} from PGDG deb-src with perf telemetry..."
         apt-get install "${APT_FLAGS[@]}" dpkg-dev debhelper build-essential liburing-dev libzstd-dev liblz4-dev
 
+        unset CCACHE_DIR CCACHE_PREFIX || true
         mkdir -p "$BUILD_DIR"
         chmod 755 /opt/drewv-pgdg-riscv64 "$LOCAL_REPO_DIR"
         chown -R _apt:root "$BUILD_DIR"
         chmod 775 "$BUILD_DIR"
 
-        P550_FLAGS="-O3 -march=rv64gc_zba_zbb"
-        if gcc -O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550 -x c -c /dev/null -o /dev/null 2>/dev/null; then
-            P550_FLAGS="-O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550"
+        P550_FLAGS="-O3 -pipe -march=rv64gc_zba_zbb"
+        if gcc -O3 -pipe -march=rv64gc_zba_zbb -mcpu=sifive-p550 -mtune=sifive-p550 -x c -c /dev/null -o /dev/null 2>/dev/null; then
+            P550_FLAGS="-O3 -pipe -march=rv64gc_zba_zbb -mcpu=sifive-p550 -mtune=sifive-p550"
         fi
         log_ok "Selected GCC P550 optimization flags: ${P550_FLAGS}"
 
@@ -500,23 +570,71 @@ else
         export DEB_CFLAGS_APPEND="$P550_FLAGS"
         export DEB_CXXFLAGS_APPEND="$P550_FLAGS"
 
-        # 1. Build postgresql-common
-        rm -rf "${BUILD_DIR:?}"/*
-        cd "$BUILD_DIR"
-        apt-get build-dep "${APT_FLAGS[@]}" postgresql-common
-        apt-get source --compile postgresql-common
-        mv -f ./*.deb "$LOCAL_REPO_DIR/"
-        update_local_pgdg_repo
+        # 1. Build PGDG postgresql-common (provides postgresql-common-dev >= 262) if not yet installed
+        if ! dpkg -s postgresql-common-dev >/dev/null 2>&1; then
+            rm -rf "${BUILD_DIR:?}"/*
+            chown _apt:root "$BUILD_DIR"
+            cd "$BUILD_DIR"
+            apt-get build-dep "${APT_FLAGS[@]}" postgresql-common
+            apt-get source --compile postgresql-common
+            mv -f ./*.deb "$LOCAL_REPO_DIR/"
+            update_local_pgdg_repo
+            apt-get install "${APT_FLAGS[@]}" postgresql-common postgresql-common-dev
+        fi
 
-        # 2. Build postgresql-18 with io_uring and Zba/Zbb instruction tuning
+        # 2. Zero-cache build of postgresql-18 wrapped in perf stat hardware counters
         rm -rf "${BUILD_DIR:?}"/*
+        chown _apt:root "$BUILD_DIR"
         cd "$BUILD_DIR"
         apt-get build-dep "${APT_FLAGS[@]}" "postgresql-${PG_VERSION}"
-        apt-get source --compile "postgresql-${PG_VERSION}"
+
+        PERF_CSV="${TELEMETRY_DIR}/pg${PG_VERSION}-forge-perf-${RUN_TS}.csv"
+        PERF_TXT="${TELEMETRY_DIR}/pg${PG_VERSION}-forge-perf-${RUN_TS}.txt"
+        META_JSON="${TELEMETRY_DIR}/pg${PG_VERSION}-forge-meta-${RUN_TS}.json"
+        PERF_EVENTS="task-clock,context-switches,cpu-migrations,page-faults,cycles,instructions,branches,branch-misses,cache-references,cache-misses,L1-dcache-loads,L1-dcache-load-misses,L1-icache-loads,L1-icache-load-misses,dTLB-loads,dTLB-load-misses,iTLB-loads,iTLB-load-misses"
+
+        # Resolve real perf binary directly (bypasses Ubuntu wrapper version check on custom vendor kernels)
+        PERF_BIN="$(command -v perf || true)"
+        if [[ -n "$PERF_BIN" ]] && ! "$PERF_BIN" stat -e cycles true >/dev/null 2>&1; then
+            PERF_BIN="$(find /usr/lib/linux-tools-* -name perf -type f 2>/dev/null | sort -V | tail -n1 || true)"
+        fi
+
+        START_EPOCH="$(date +%s.%N)"
+        if [[ -n "$PERF_BIN" ]] && "$PERF_BIN" stat -e cycles true >/dev/null 2>&1; then
+            log_ok "Capturing SiFive P550 PMU counters via ${PERF_BIN} stat -> ${PERF_CSV}"
+            "$PERF_BIN" stat -x, -o "$PERF_CSV" -e "$PERF_EVENTS" \
+                apt-get source --compile "postgresql-${PG_VERSION}"
+            awk -F, 'NF>=3 {printf "%-28s : %18s %s\n", $3, $1, $2}' "$PERF_CSV" > "$PERF_TXT"
+        else
+            log_warn "Kernel perf binary unavailable; recording execution metrics with /usr/bin/time -> ${PERF_TXT}"
+            /usr/bin/time -v -o "$PERF_TXT" apt-get source --compile "postgresql-${PG_VERSION}"
+        fi
+        END_EPOCH="$(date +%s.%N)"
+        WALL_SECS="$(echo "${END_EPOCH} - ${START_EPOCH}" | bc -l)"
+
         mv -f ./*.deb "$LOCAL_REPO_DIR/"
-        cp -a "${LOCAL_REPO_DIR}"/*.deb "$NVME_CACHE_DIR/" || true
+        if [[ "$USE_PKG_CACHE" == "true" ]]; then
+            mkdir -p "$NVME_CACHE_DIR"
+            cp -a "${LOCAL_REPO_DIR}"/*.deb "$NVME_CACHE_DIR/" || true
+        fi
         update_local_pgdg_repo
-        log_ok "Compiled and cached P550-tuned postgresql-${PG_VERSION} packages ($NVME_CACHE_DIR)"
+
+        cat << EOF > "$META_JSON"
+{
+  "hostname": "${TARGET_HOSTNAME}",
+  "role": "${NODE_ROLE}",
+  "soc": "ESWIN EIC7700X (4x SiFive P550 @ 1.4GHz)",
+  "isa_flags": "${P550_FLAGS}",
+  "pg_version": "${PG_VERSION}",
+  "zero_cache_build": $([[ "$USE_PKG_CACHE" == "false" ]] && echo "true" || echo "false"),
+  "build_threads": $(nproc),
+  "wall_clock_seconds": $(printf "%.3f" "$WALL_SECS"),
+  "timestamp_utc": "${RUN_TS}",
+  "perf_csv": "${PERF_CSV}",
+  "perf_summary": "${PERF_TXT}"
+}
+EOF
+        log_ok "Compiled postgresql-${PG_VERSION} from source in $(printf "%.2f" "$WALL_SECS")s (Telemetry: $META_JSON)"
     fi
 
     apt-get install "${APT_FLAGS[@]}" "postgresql-${PG_VERSION}" "postgresql-client-${PG_VERSION}"
@@ -535,15 +653,16 @@ CONF_DIR="/etc/postgresql/${PG_VERSION}/main/conf.d"
 DROPIN_CONF="${CONF_DIR}/99-brakerbox-p550.conf"
 PG_HBA="/etc/postgresql/${PG_VERSION}/main/pg_hba.conf"
 
-# Remove legacy typo config file if present (do NOT delete $DROPIN_CONF)
+# Remove legacy typo config file if present
 rm -f "${CONF_DIR}/99-brackerbox-p550.conf"
 
 # 5.1 Idempotent Data Directory Migration
-if [[ -f "${NVME_PG_DATA}/PG_VERSION" && "$FORCE_WIPE_NVME" == "false" ]]; then
+if [[ -f "${NVME_PG_DATA}/PG_VERSION" && "$FORCE_WIPE_NVME" == "false" && "$FORCE_REBUILD_PG" == "false" ]]; then
     log_skip "PostgreSQL cluster already initialized on NVMe at ${NVME_PG_DATA}"
 else
     echo "Migrating initial PostgreSQL ${PG_VERSION} cluster to ${NVME_PG_DATA}..."
     systemctl stop postgresql
+    rm -rf "${NVME_PG_DATA:?}"
     mkdir -p "$NVME_PG_DATA"
     chown -R postgres:postgres "$NVME_PG_ROOT"
     chmod 700 "$NVME_PG_DATA"
@@ -552,15 +671,6 @@ else
     chown -R postgres:postgres "$NVME_PG_ROOT"
     log_ok "Synced clean cluster from $DEFAULT_PG_DATA to $NVME_PG_DATA"
 fi
-
-# If BigRed / LilBlu are mounted, prepare warm/cold PostgreSQL tablespace directories
-for raid_mp in "$BIGRED_MOUNT" "$LILBLU_MOUNT"; do
-    if mountpoint -q "$raid_mp"; then
-        mkdir -p "${raid_mp}/postgresql/tablespaces"
-        chown -R postgres:postgres "${raid_mp}/postgresql"
-        chmod 700 "${raid_mp}/postgresql/tablespaces"
-    fi
-done
 
 # 5.2 Auto-verify io_uring support in PostgreSQL binary & kernel
 PG_BIN="/usr/lib/postgresql/${PG_VERSION}/bin/postgres"
@@ -577,19 +687,21 @@ mkdir -p "$CONF_DIR"
 DESIRED_PG_CONF="# DREW-V Labs: SiFive HiFive Premier P550 (32GB LPDDR5 + WD_BLACK SN850X 4Kn)
 data_directory = '${NVME_PG_DATA}'
 listen_addresses = '*'
+max_connections = 250
 
-# 32GB LPDDR5 Memory Allocation
+# 32GB LPDDR5 Memory Allocation (Backed by 2MB Sv39 HugePages)
 shared_buffers = 8GB
 effective_cache_size = 24GB
-work_mem = 64MB
+work_mem = 32MB
 maintenance_work_mem = 2GB
 huge_pages = try
 
 # SiFive P550 4-Core (3-Wide Out-of-Order, RVA20+Zba/Zbb) Tuning
 jit = off
-max_worker_processes = 4
+max_worker_processes = 8
 max_parallel_workers = 4
 max_parallel_workers_per_gather = 2
+max_parallel_maintenance_workers = 2
 
 # WD_BLACK SN850X 4Kn PCIe Gen3 x4 & PostgreSQL 18 Async I/O
 io_method = ${IO_METHOD}
@@ -597,13 +709,16 @@ effective_io_concurrency = 200
 maintenance_io_concurrency = 100
 random_page_cost = 1.1
 track_io_timing = on
+track_wal_io_timing = on
 
-# WAL & Checkpoints
+# WAL, Group Commit & Checkpoints
 wal_compression = zstd
 wal_buffers = 64MB
 min_wal_size = 2GB
 max_wal_size = 16GB
-checkpoint_completion_target = 0.9"
+checkpoint_completion_target = 0.9
+commit_delay = 20
+commit_siblings = 8"
 
 NEED_PG_RESTART="false"
 if [[ ! -f "$DROPIN_CONF" ]] || [[ "$(cat "$DROPIN_CONF")" != "$DESIRED_PG_CONF" ]]; then
@@ -632,6 +747,36 @@ else
     log_skip "PostgreSQL ${PG_VERSION} is already active and running current config"
 fi
 
+# 5.5 Optional Warm/Cold Tablespace Provisioning (ONLY if --with-raid is passed)
+if [[ "$WITH_RAID" == "true" ]]; then
+    for raid_mp in "$BIGRED_MOUNT" "$LILBLU_MOUNT"; do
+        if mountpoint -q "$raid_mp"; then
+            ts_dir="${raid_mp}/postgresql/tablespaces"
+            mkdir -p "$ts_dir"
+            # Disable Btrfs Copy-on-Write (+C) on tablespace dir before PG writes heap files
+            chattr +C "$ts_dir" 2>/dev/null || true
+            chown -R postgres:postgres "${raid_mp}/postgresql"
+            chmod 700 "$ts_dir"
+        fi
+    done
+
+    if mountpoint -q "$BIGRED_MOUNT"; then
+        if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_tablespace WHERE spcname = 'ts_bigred_warm';" | grep -q 1; then
+            rm -rf "${BIGRED_MOUNT}/postgresql/tablespaces"/PG_* 2>/dev/null || true
+            sudo -u postgres psql -c "CREATE TABLESPACE ts_bigred_warm LOCATION '${BIGRED_MOUNT}/postgresql/tablespaces';"
+        fi
+        log_ok "Verified Warm Tablespace: ts_bigred_warm (${BIGRED_MOUNT}/postgresql/tablespaces)"
+    fi
+
+    if mountpoint -q "$LILBLU_MOUNT"; then
+        if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_tablespace WHERE spcname = 'ts_lilblu_cold';" | grep -q 1; then
+            rm -rf "${LILBLU_MOUNT}/postgresql/tablespaces"/PG_* 2>/dev/null || true
+            sudo -u postgres psql -c "CREATE TABLESPACE ts_lilblu_cold LOCATION '${LILBLU_MOUNT}/postgresql/tablespaces';"
+        fi
+        log_ok "Verified Cold Tablespace: ts_lilblu_cold (${LILBLU_MOUNT}/postgresql/tablespaces)"
+    fi
+fi
+
 # ==============================================================================
 # STAGE 6: Post-Flight Verification Summary
 # ==============================================================================
@@ -640,17 +785,20 @@ log_step "6. Post-Flight Verification Summary"
 ACTIVE_DATA_DIR="$(sudo -u postgres psql -tAc "SHOW data_directory;" 2>/dev/null || echo "N/A")"
 ACTIVE_IO_METHOD="$(sudo -u postgres psql -tAc "SHOW io_method;" 2>/dev/null || echo "N/A")"
 ACTIVE_BUFFERS="$(sudo -u postgres psql -tAc "SHOW shared_buffers;" 2>/dev/null || echo "N/A")"
+HUGEPAGES_FREE="$(awk '/HugePages_Free:/ {print $2}' /proc/meminfo)"
+HUGEPAGES_TOTAL="$(awk '/HugePages_Total:/ {print $2}' /proc/meminfo)"
 FINAL_LBA="$(cat "/sys/block/${NVME_SHORT}/queue/logical_block_size")"
 
-printf "  • Hostname           : %s\n" "$(hostname)"
+printf "  • Hostname           : %s (Role: %s)\n" "$(hostname)" "$NODE_ROLE"
 printf "  • Kernel / Arch      : %s (%s)\n" "$(uname -r)" "$(uname -m)"
 printf "  • NVMe LBA Block Sz  : %s bytes\n" "$FINAL_LBA"
 printf "  • Hot NVMe Mount     : %s\n" "$(findmnt -n -o SOURCE,TARGET,FSTYPE,OPTIONS "$MOUNT_POINT" || echo "Not Mounted")"
-printf "  • Warm RAID (BigRed) : %s\n" "$(findmnt -n -o SOURCE,TARGET,FSTYPE "$BIGRED_MOUNT" 2>/dev/null || echo "Not Mounted")"
-printf "  • Cold RAID (LilBlu) : %s\n" "$(findmnt -n -o SOURCE,TARGET,FSTYPE "$LILBLU_MOUNT" 2>/dev/null || echo "Not Mounted")"
+printf "  • Warm RAID (BigRed) : %s\n" "$(findmnt -n -o SOURCE,TARGET,FSTYPE "$BIGRED_MOUNT" 2>/dev/null || echo "Skipped / Not Mounted")"
+printf "  • Cold RAID (LilBlu) : %s\n" "$(findmnt -n -o SOURCE,TARGET,FSTYPE "$LILBLU_MOUNT" 2>/dev/null || echo "Skipped / Not Mounted")"
 printf "  • PG Data Directory  : %s\n" "$ACTIVE_DATA_DIR"
 printf "  • PG 18 Async I/O    : io_method = %s\n" "$ACTIVE_IO_METHOD"
-printf "  • PG Shared Buffers  : %s\n" "$ACTIVE_BUFFERS"
+printf "  • PG Shared Buffers  : %s (HugePages in use: %d / %d)\n" "$ACTIVE_BUFFERS" "$((HUGEPAGES_TOTAL - HUGEPAGES_FREE))" "$HUGEPAGES_TOTAL"
 
 echo ""
 log_ok "${TARGET_HOSTNAME} PostgreSQL ${PG_VERSION} Forge Complete!"
+echo ""
