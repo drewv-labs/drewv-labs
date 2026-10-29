@@ -2,8 +2,6 @@
 
 *Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic*
 
----
-
 
 ## Current Projects
 
