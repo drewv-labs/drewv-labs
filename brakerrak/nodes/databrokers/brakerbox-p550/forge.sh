@@ -90,7 +90,7 @@ if [[ "$CURRENT_HOSTNAME" != "$TARGET_HOSTNAME" ]]; then
         sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t${TARGET_HOSTNAME}/g" /etc/hosts || true
         grep -qE "[[:space:]]${TARGET_HOSTNAME}([[:space:]]|$)" /etc/hosts || printf "127.0.1.1\t%s\n" "$TARGET_HOSTNAME" >> /etc/hosts
     fi
-    log_ok "Hostname set to ${TARGET_HOSTNAME} ( was ${CURRENT_HOSTNAME} )"
+    log_ok "Hostname set to ${TARGET_HOSTNAME} (was ${CURRENT_HOSTNAME})"
 else
     log_skip "Hostname is already ${TARGET_HOSTNAME}"
 fi
@@ -122,7 +122,6 @@ fi
 
 # 0.4 Idempotent Snap & Desktop GUI Bloat Purge (BEFORE apt upgrade to avoid upgrading bloat)
 if command -v snap >/dev/null 2>&1 || dpkg -l snapd 2>/dev/null | grep -q "^ii"; then
-    # Remove leaf snaps before base snaps so dependencies don't block removal
     for s in firefox snap-store gnome-42-2204 gtk-common-themes core22 bare snapd; do
         snap remove --purge "$s" 2>/dev/null || true
     done
@@ -157,7 +156,7 @@ fi
 # 0.5 Install Core Packages & SiFive P550 PWM Fan Controller
 CORE_PKGS=(
     fancontrol-config-p550-premier
-    mdadm lvm2 xfsprogs parted smartmontools nvme-cli
+    mdadm lvm2 xfsprogs btrfs-progs parted smartmontools nvme-cli
     linux-tools-common sysstat iotop htop
     jq curl ca-certificates gnupg lsb-release git build-essential
 )
@@ -301,7 +300,15 @@ fi
 
 # ==============================================================================
 # STAGE 3B: Optional SilverStone USB RAID 10 (BigRed-WDR48 & LilBlu-WDB24)
+# Supports mdadm RAID10+XFS (if md_mod present) or native Btrfs RAID10 fallback
 # ==============================================================================
+HAS_MD_MOD="false"
+if modprobe md_mod 2>/dev/null || [[ -d /sys/module/md_mod ]]; then
+    HAS_MD_MOD="true"
+else
+    modprobe btrfs 2>/dev/null || true
+fi
+
 provision_usb_raid10() {
     local array_name="$1"
     local md_dev="$2"
@@ -310,16 +317,19 @@ provision_usb_raid10() {
     local min_bytes="$5"
     local max_bytes="$6"
 
-    echo "--- Checking $array_name ($md_dev -> $mount_pt) ---"
-    mdadm --assemble --scan 2>/dev/null || true
+    echo "--- Checking $array_name ($fs_label -> $mount_pt) ---"
+    if [[ "$HAS_MD_MOD" == "true" ]]; then
+        mdadm --assemble --scan 2>/dev/null || true
+    else
+        btrfs device scan >/dev/null 2>&1 || true
+    fi
 
     local existing_fs
     existing_fs="$(blkid -L "$fs_label" || true)"
 
     if [[ -n "$existing_fs" && "$FORCE_WIPE_RAID" == "false" ]]; then
-        log_skip "$array_name XFS volume '$fs_label' already exists on $existing_fs"
+        log_skip "$array_name volume '$fs_label' already exists on $existing_fs"
     else
-        # Auto-discover matching disks by byte capacity (avoids /dev/sdX order roulette)
         mapfile -t CANDIDATE_DISKS < <(
             lsblk -b -dn -o NAME,SIZE,TYPE | awk -v min="$min_bytes" -v max="$max_bytes" '
                 $3 == "disk" && $2 >= min && $2 <= max { print "/dev/"$1 }
@@ -331,41 +341,57 @@ provision_usb_raid10() {
             return 0
         fi
 
-        log_warn "Building $array_name RAID 10 across 4 drives: ${CANDIDATE_DISKS[*]}"
         umount "$mount_pt" 2>/dev/null || true
-        mdadm --stop "$md_dev" 2>/dev/null || true
 
-        for d in "${CANDIDATE_DISKS[@]}"; do
-            mdadm --zero-superblock "$d" 2>/dev/null || true
-            wipefs -a "$d"
-        done
-
-        # --assume-clean prevents an 18-hour background resync over 5Gbps USB on freshly wiped drives
-        mdadm --create "$md_dev" \
-            --level=10 --raid-devices=4 \
-            --metadata=1.2 --bitmap=internal --assume-clean \
-            --name="$array_name" --run --force \
-            "${CANDIDATE_DISKS[@]}"
-
-        udevadm settle
-        mkfs.xfs -f -b size=4096 -L "$fs_label" "$md_dev"
-        udevadm settle
-        log_ok "Created and formatted $array_name ($md_dev) with XFS label '$fs_label'"
+        if [[ "$HAS_MD_MOD" == "true" ]]; then
+            log_warn "Building $array_name mdadm RAID 10 + XFS across 4 drives: ${CANDIDATE_DISKS[*]}"
+            mdadm --stop "$md_dev" 2>/dev/null || true
+            for d in "${CANDIDATE_DISKS[@]}"; do
+                mdadm --zero-superblock "$d" 2>/dev/null || true
+                wipefs -a "$d"
+            done
+            mdadm --create "$md_dev" \
+                --level=10 --raid-devices=4 \
+                --metadata=1.2 --bitmap=internal --assume-clean \
+                --name="$array_name" --run --force \
+                "${CANDIDATE_DISKS[@]}"
+            udevadm settle
+            mkfs.xfs -f -b size=4096 -L "$fs_label" "$md_dev"
+            udevadm settle
+            log_ok "Created and formatted $array_name ($md_dev) with XFS label '$fs_label'"
+        else
+            log_warn "Kernel lacks md_mod; building native Btrfs RAID 10 (-d raid10 -m raid10) across: ${CANDIDATE_DISKS[*]}"
+            for d in "${CANDIDATE_DISKS[@]}"; do
+                wipefs -a "$d"
+            done
+            mkfs.btrfs -f -L "$fs_label" -d raid10 -m raid10 "${CANDIDATE_DISKS[@]}"
+            udevadm settle
+            btrfs device scan >/dev/null 2>&1 || true
+            log_ok "Created native 4-drive Btrfs RAID 10 volume '$fs_label' (${CANDIDATE_DISKS[*]})"
+        fi
     fi
 
     mkdir -p "$mount_pt"
-    local raid_fstab="LABEL=${fs_label}  ${mount_pt}  xfs  defaults,noatime,nodiratime,nofail,x-systemd.device-timeout=15s  0  2"
+    local fs_type
+    fs_type="$(blkid -s TYPE -o value -L "$fs_label" 2>/dev/null || echo "btrfs")"
+    local raid_fstab
+    if [[ "$fs_type" == "btrfs" ]]; then
+        raid_fstab="LABEL=${fs_label}  ${mount_pt}  btrfs  defaults,noatime,compress=zstd:1,nofail,x-systemd.device-timeout=15s  0  0"
+    else
+        raid_fstab="LABEL=${fs_label}  ${mount_pt}  xfs  defaults,noatime,nodiratime,nofail,x-systemd.device-timeout=15s  0  2"
+    fi
+
     if ! grep -q "LABEL=${fs_label}" /etc/fstab; then
         echo "$raid_fstab" >> /etc/fstab
         systemctl daemon-reload
-        log_ok "Added $fs_label ($mount_pt) to /etc/fstab with nofail protection"
+        log_ok "Added $fs_label ($mount_pt, $fs_type) to /etc/fstab with nofail protection"
     else
         log_skip "$fs_label already in /etc/fstab"
     fi
 
     if ! mountpoint -q "$mount_pt"; then
         mount "$mount_pt"
-        log_ok "Mounted $mount_pt"
+        log_ok "Mounted $mount_pt ($fs_type RAID 10)"
     else
         log_skip "$mount_pt is already mounted"
     fi
@@ -380,16 +406,17 @@ if [[ "$WITH_RAID" == "true" ]]; then
     # LilBlu-WDB24: 4x 6TB WD Blue (~6,001,175,126,016 bytes -> match 5.5TB to 6.5TB)
     provision_usb_raid10 "lilblu" "$LILBLU_MD" "$LILBLU_LABEL" "$LILBLU_MOUNT" 5500000000000 6500000000000
 
-    # Idempotently persist active mdadm array definitions into /etc/mdadm/mdadm.conf
-    mkdir -p /etc/mdadm
-    MDADM_SCAN="$(mdadm --detail --scan)"
-    if ! grep -qF "$MDADM_SCAN" /etc/mdadm/mdadm.conf 2>/dev/null; then
-        sed -i '/^ARRAY /d' /etc/mdadm/mdadm.conf 2>/dev/null || true
-        echo "$MDADM_SCAN" >> /etc/mdadm/mdadm.conf
-        update-initramfs -u
-        log_ok "Updated /etc/mdadm/mdadm.conf and initramfs"
-    else
-        log_skip "/etc/mdadm/mdadm.conf already contains active array definitions"
+    if [[ "$HAS_MD_MOD" == "true" ]]; then
+        mkdir -p /etc/mdadm
+        MDADM_SCAN="$(mdadm --detail --scan)"
+        if ! grep -qF "$MDADM_SCAN" /etc/mdadm/mdadm.conf 2>/dev/null; then
+            sed -i '/^ARRAY /d' /etc/mdadm/mdadm.conf 2>/dev/null || true
+            echo "$MDADM_SCAN" >> /etc/mdadm/mdadm.conf
+            update-initramfs -u
+            log_ok "Updated /etc/mdadm/mdadm.conf and initramfs"
+        else
+            log_skip "/etc/mdadm/mdadm.conf already contains active array definitions"
+        fi
     fi
 else
     log_step "3B. SilverStone USB RAID Provisioning Skipped (Pass --with-raid to enable)"
@@ -416,7 +443,6 @@ else
     log_skip "PGDG signing key already present"
 fi
 
-# Configure both binary (if upstream adds riscv64 later) and deb-src PGDG channels
 EXPECTED_REPO="# DREW-V Labs PGDG riscv64 Source & Binary Channels
 deb [arch=riscv64 signed-by=${PGDG_KEY}] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main
 deb-src [signed-by=${PGDG_KEY}] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main ${PG_VERSION}"
@@ -435,19 +461,22 @@ update_local_pgdg_repo() {
     apt-get update -o Acquire::GzipIndexes=false -q
 }
 
+mkdir -p "$LOCAL_REPO_DIR" "$NVME_CACHE_DIR"
+
+# Sync any newly built .debs between /opt and NVMe persistent cache
+if ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1 && \
+   ! ls "${NVME_CACHE_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
+    cp -a "${LOCAL_REPO_DIR}"/*.deb "$NVME_CACHE_DIR/" || true
+    log_ok "Backed up compiled P550 PostgreSQL ${PG_VERSION} .deb packages to NVMe ($NVME_CACHE_DIR)"
+elif ! ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1 && \
+     ls "${NVME_CACHE_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
+    cp -a "${NVME_CACHE_DIR}"/*.deb "$LOCAL_REPO_DIR/"
+    log_ok "Restored cached P550 PostgreSQL ${PG_VERSION} .deb packages from NVMe"
+fi
+
 if dpkg -s "postgresql-${PG_VERSION}" >/dev/null 2>&1; then
     log_skip "postgresql-${PG_VERSION} is already installed"
 else
-    mkdir -p "$LOCAL_REPO_DIR" "$NVME_CACHE_DIR"
-
-    # Restore cached P550 .deb packages from NVMe if eMMC was reflashed
-    if ! ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1 && \
-       ls "${NVME_CACHE_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
-        cp -a "${NVME_CACHE_DIR}"/*.deb "$LOCAL_REPO_DIR/"
-        log_ok "Restored cached P550 PostgreSQL ${PG_VERSION} .deb packages from NVMe"
-    fi
-
-    # Check if binary is available from upstream or local cache; otherwise compile from deb-src
     if ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
         update_local_pgdg_repo
         log_skip "Found cached P550-optimized postgresql-${PG_VERSION} .deb packages in $LOCAL_REPO_DIR"
@@ -460,12 +489,9 @@ else
         chown -R _apt:root "$BUILD_DIR"
         chmod 775 "$BUILD_DIR"
 
-        # Auto-probe highest supported SiFive P550 ISA/tuning flags on active GCC
         P550_FLAGS="-O3 -march=rv64gc_zba_zbb"
         if gcc -O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550 -x c -c /dev/null -o /dev/null 2>/dev/null; then
             P550_FLAGS="-O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550"
-        elif gcc -O3 -march=rv64gc_zba_zbb -mtune=generic-ooo -x c -c /dev/null -o /dev/null 2>/dev/null; then
-            P550_FLAGS="-O3 -march=rv64gc_zba_zbb -mtune=generic-ooo"
         fi
         log_ok "Selected GCC P550 optimization flags: ${P550_FLAGS}"
 
@@ -473,7 +499,7 @@ else
         export DEB_CFLAGS_APPEND="$P550_FLAGS"
         export DEB_CXXFLAGS_APPEND="$P550_FLAGS"
 
-        # 1. Build postgresql-common (>= 262 required by PG 18)
+        # 1. Build postgresql-common
         rm -rf "${BUILD_DIR:?}"/*
         cd "$BUILD_DIR"
         apt-get build-dep "${APT_FLAGS[@]}" postgresql-common
