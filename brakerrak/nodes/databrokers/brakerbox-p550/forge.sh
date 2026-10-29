@@ -398,11 +398,15 @@ fi
 # ==============================================================================
 # STAGE 4: Installing PostgreSQL $PG_VERSION (PGDG Ubuntu Noble riscv64)
 # ==============================================================================
-log_step "4. Installing PostgreSQL ${PG_VERSION} (PGDG riscv64)"
+log_step "4. Installing PostgreSQL ${PG_VERSION} (PGDG riscv64 + SiFive P550 Zba/Zbb)"
 
 PGDG_KEY="/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc"
 PGDG_LIST="/etc/apt/sources.list.d/pgdg.list"
+LOCAL_LIST="/etc/apt/sources.list.d/drewv-local-pgdg.list"
 CODENAME="$(lsb_release -cs)"
+LOCAL_REPO_DIR="/opt/drewv-pgdg-riscv64/debs"
+NVME_CACHE_DIR="${MOUNT_POINT}/.pkg-cache/pgdg-riscv64"
+BUILD_DIR="/opt/drewv-pgdg-riscv64/build"
 
 if [[ ! -f "$PGDG_KEY" ]]; then
     install -d /usr/share/postgresql-common/pgdg
@@ -412,21 +416,75 @@ else
     log_skip "PGDG signing key already present"
 fi
 
-EXPECTED_REPO="deb [arch=riscv64 signed-by=${PGDG_KEY}] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main"
-if [[ ! -f "$PGDG_LIST" ]] || ! grep -q "${CODENAME}-pgdg" "$PGDG_LIST"; then
+# Configure both binary (if upstream adds riscv64 later) and deb-src PGDG channels
+EXPECTED_REPO="# DREW-V Labs PGDG riscv64 Source & Binary Channels
+deb [arch=riscv64 signed-by=${PGDG_KEY}] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main
+deb-src [signed-by=${PGDG_KEY}] https://apt.postgresql.org/pub/repos/apt ${CODENAME}-pgdg main ${PG_VERSION}"
+
+if [[ ! -f "$PGDG_LIST" ]] || [[ "$(cat "$PGDG_LIST")" != "$EXPECTED_REPO" ]]; then
     echo "$EXPECTED_REPO" > "$PGDG_LIST"
     apt-get update -q
-    log_ok "Configured PGDG repository for ${CODENAME}-pgdg (riscv64)"
+    log_ok "Configured PGDG binary + deb-src repositories for ${CODENAME}-pgdg"
 else
     log_skip "PGDG repository already configured"
 fi
 
-if ! dpkg -s "postgresql-${PG_VERSION}" >/dev/null 2>&1; then
-    apt-get update -q
+update_local_pgdg_repo() {
+    (cd "$LOCAL_REPO_DIR" && dpkg-scanpackages . /dev/null > Packages 2>/dev/null)
+    echo "deb [trusted=yes] file://${LOCAL_REPO_DIR} ./" > "$LOCAL_LIST"
+    apt-get update -o Acquire::GzipIndexes=false -q
+}
+
+if dpkg -s "postgresql-${PG_VERSION}" >/dev/null 2>&1; then
+    log_skip "postgresql-${PG_VERSION} is already installed"
+else
+    mkdir -p "$LOCAL_REPO_DIR" "$NVME_CACHE_DIR"
+
+    # Restore cached P550 .deb packages from NVMe if eMMC was reflashed
+    if ! ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1 && \
+       ls "${NVME_CACHE_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
+        cp -a "${NVME_CACHE_DIR}"/*.deb "$LOCAL_REPO_DIR/"
+        log_ok "Restored cached P550 PostgreSQL ${PG_VERSION} .deb packages from NVMe"
+    fi
+
+    # Check if binary is available from upstream or local cache; otherwise compile from deb-src
+    if ls "${LOCAL_REPO_DIR}"/postgresql-${PG_VERSION}_*.deb >/dev/null 2>&1; then
+        update_local_pgdg_repo
+        log_skip "Found cached P550-optimized postgresql-${PG_VERSION} .deb packages in $LOCAL_REPO_DIR"
+    elif ! apt-cache show "postgresql-${PG_VERSION}" >/dev/null 2>&1; then
+        log_warn "No upstream riscv64 binary in ${CODENAME}-pgdg; compiling P550-tuned (${PG_VERSION}) from PGDG deb-src..."
+        apt-get install "${APT_FLAGS[@]}" dpkg-dev debhelper build-essential liburing-dev libzstd-dev liblz4-dev
+
+        mkdir -p "$BUILD_DIR"
+        chmod 755 /opt/drewv-pgdg-riscv64 "$LOCAL_REPO_DIR"
+        chown -R _apt:root "$BUILD_DIR"
+        chmod 775 "$BUILD_DIR"
+
+        export DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)"
+        export DEB_CFLAGS_APPEND="-O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550"
+        export DEB_CXXFLAGS_APPEND="-O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550"
+
+        # 1. Build postgresql-common (>= 262 required by PG 18)
+        rm -rf "${BUILD_DIR:?}"/*
+        cd "$BUILD_DIR"
+        apt-get build-dep "${APT_FLAGS[@]}" postgresql-common
+        apt-get source --compile postgresql-common
+        mv -f ./*.deb "$LOCAL_REPO_DIR/"
+        update_local_pgdg_repo
+
+        # 2. Build postgresql-18 with io_uring and Zba/Zbb instruction tuning
+        rm -rf "${BUILD_DIR:?}"/*
+        cd "$BUILD_DIR"
+        apt-get build-dep "${APT_FLAGS[@]}" "postgresql-${PG_VERSION}"
+        apt-get source --compile "postgresql-${PG_VERSION}"
+        mv -f ./*.deb "$LOCAL_REPO_DIR/"
+        cp -a "${LOCAL_REPO_DIR}"/*.deb "$NVME_CACHE_DIR/" || true
+        update_local_pgdg_repo
+        log_ok "Compiled and cached P550-tuned postgresql-${PG_VERSION} packages ($NVME_CACHE_DIR)"
+    fi
+
     apt-get install "${APT_FLAGS[@]}" "postgresql-${PG_VERSION}" "postgresql-client-${PG_VERSION}"
     log_ok "Installed postgresql-${PG_VERSION}"
-else
-    log_skip "postgresql-${PG_VERSION} is already installed"
 fi
 
 # ==============================================================================
