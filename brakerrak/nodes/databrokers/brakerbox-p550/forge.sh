@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # DREW-V Labs // SiFive HiFive Premier P550 Data Broker Forge Script
-# Path: drewv-labs/brakerrack/nodes/databrokers/brakerbox-p550/forge.sh
+# Path: drewv-labs/brakerrak/nodes/databrokers/brakerbox-p550/forge.sh
 # Architecture: RVA20 (RV64GC + Zba/Zbb) | 4x P550 3-Wide OoO | 32GB LPDDR5
 #
 # Usage:
@@ -616,7 +616,7 @@ else
 fi
 
 if [[ -f "$PG_HBA" ]] && ! grep -qF "$LAB_SUBNET" "$PG_HBA"; then
-    printf "\n# DREW-V Labs BrakerRack Subnet Access\nhost    all             all             %s            scram-sha-256\n" "$LAB_SUBNET" >> "$PG_HBA"
+    printf "\n# DREW-V Labs BrakerRak Subnet Access\nhost    all             all             %s            scram-sha-256\n" "$LAB_SUBNET" >> "$PG_HBA"
     NEED_PG_RESTART="true"
     log_ok "Added lab subnet ($LAB_SUBNET) rule to $PG_HBA"
 else

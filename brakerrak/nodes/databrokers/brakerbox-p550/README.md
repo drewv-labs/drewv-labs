@@ -10,13 +10,13 @@
 
 **Rack Location:** `BrackerRack U10; target=U04`   
 **Primary Role:** Interim Production Data Broker (`brakerbox-p550`) & 3-Wide Out-of-Order RVA20 Benchmark Target (`brakerbench-p550`)  
-**Ecosystem:** `DREW-V Labs` // `BrakerRack` & `HamStack` (`CarrierPigeons` Wrapper)
+**Ecosystem:** `DREW-V Labs` // `BrakerRak` & `HamStack` (`CarrierPigeons` Wrapper)
 
 ---
 
 ## 1. Architectural Overview
 
-`brakerbox-p550` is a 1U rackmount RISC-V data broker built around the **SiFive HiFive Premier P550** (`HF106-001`) Mini-DTX platform. Within the `BrakerRack` matrix, it serves two functions:
+`brakerbox-p550` is a 1U rackmount RISC-V data broker built around the **SiFive HiFive Premier P550** (`HF106-001`) Mini-DTX platform. Within the `BrakerRak` matrix, it serves two functions:
 
 1. **Interim Production Data Broker (`--role prod`):** Hosts **PostgreSQL 18** (`PigeonCoop` Continuous Telemetric Documentation ledger), MQTT ingestion, and tiered storage pools while `brakerbox-titan` is on backorder.
 2. **Microarchitectural Benchmark Target (`--role bench`):** Provides a **13-stage, triple-issue, Out-of-Order (OoO)** `RVA20` (`RV64GC` + `Zba`/`Zbb`) reference pipeline with 4MB of coherent L3 cache to benchmark against the 8-stage, dual-issue **In-Order** `SiFive U74` (`brakerbench-vf2`) and 4-wide OoO architectures.
@@ -62,7 +62,7 @@ Factory `WD_BLACK SN850X` drives ship in emulated `512e` (`512`-byte logical sec
 ## 4. Directory Structure
 
 ```text
-brakerrack/nodes/databrokers/brakerbox-p550/
+brakerrak/nodes/databrokers/brakerbox-p550/
 ├── README.md          # Node architecture, hardware topology, and convergence runbook
 ├── forge.sh           # Idempotent bare-metal provisioning & PostgreSQL 18 forge script
 ├── ort-snapshot.py    # Read-only Day-0/Day-1 ORT assertion & CTD JSON manifest generator

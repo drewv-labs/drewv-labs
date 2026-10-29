@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 DREW-V Labs // Operational Readiness Test (ORT) & CTD Provenance Snapshot
-Path: drewv-labs/brakerrack/nodes/databrokers/brakerbox-p550/ort-snapshot.py
+Path: drewv-labs/brakerrak/nodes/databrokers/brakerbox-p550/ort-snapshot.py
 Strictly Read-Only System Inspector & Quiescent Baseline Profiler.
 
 Usage:
@@ -442,7 +442,7 @@ def main():
         "schema_version": "drewv-ctd-manifest/v1.0",
         "artifact": {
             "id": socket.gethostname(),
-            "node_group": "brakerrack-databrokers",
+            "node_group": "brakerrak-databrokers",
             "target_designation": "brakerbox-p550 (interim prod) / brakerbench-p550",
             "kind": "hardware_node_baseline_snapshot",
             "stage": args.stage,
