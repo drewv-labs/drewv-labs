@@ -2,11 +2,6 @@
 
 *Simplicity in Architecture · Efficiency in Engineering · Purity in Science · Audacity in Art · Life in Logic*
 
-
-## About  
-
-Located in North Texas, Indie Researcher Drew Vandagriff of **DREW-V Labs** is passionate about RISC-V Edge ML and Data Engineering R&D.
-
 ---
 
 
