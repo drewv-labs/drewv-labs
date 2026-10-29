@@ -460,9 +460,18 @@ else
         chown -R _apt:root "$BUILD_DIR"
         chmod 775 "$BUILD_DIR"
 
+        # Auto-probe highest supported SiFive P550 ISA/tuning flags on active GCC
+        P550_FLAGS="-O3 -march=rv64gc_zba_zbb"
+        if gcc -O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550 -x c -c /dev/null -o /dev/null 2>/dev/null; then
+            P550_FLAGS="-O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550"
+        elif gcc -O3 -march=rv64gc_zba_zbb -mtune=generic-ooo -x c -c /dev/null -o /dev/null 2>/dev/null; then
+            P550_FLAGS="-O3 -march=rv64gc_zba_zbb -mtune=generic-ooo"
+        fi
+        log_ok "Selected GCC P550 optimization flags: ${P550_FLAGS}"
+
         export DEB_BUILD_OPTIONS="nocheck parallel=$(nproc)"
-        export DEB_CFLAGS_APPEND="-O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550"
-        export DEB_CXXFLAGS_APPEND="-O3 -march=rv64gc_zba_zbb -mcpu=sifive-p550"
+        export DEB_CFLAGS_APPEND="$P550_FLAGS"
+        export DEB_CXXFLAGS_APPEND="$P550_FLAGS"
 
         # 1. Build postgresql-common (>= 262 required by PG 18)
         rm -rf "${BUILD_DIR:?}"/*
