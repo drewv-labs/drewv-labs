@@ -2,9 +2,10 @@
 
 # DREW-V Labs
 
+## About  
+
 </div>
 
-## About  
 
 Located in North Texas, Independent Researcher **DREW-V Labs** is focused on RISC-V Edge ML and Data Engineering R&D.
 
