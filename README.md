@@ -19,7 +19,7 @@ Located in North Texas, Indie Researcher Drew Vandagriff of **DREW-V Labs** is p
 
 </div>
 
-* [RISC-V Data Kit](https://github.com/drewv-labs/riscv-data-kit) (`WIP`): Bare-metal RISC-V data engineering toolkit: headless OS bootstrap, U-Boot/BSP pinning, PMU perf counters, Sv39 HugePages, and NVMe/PCIe tuning for SiFive, StarFive & Milk-V developer boards.
+* [RISC-V Data Kit](https://github.com/drewv-labs/riscv-data-kit) (`WIP`): Bare-metal Day-0 bootstrap, kernel tuning, and hardware telemetry toolkit for RISC-V data engineering and Edge ML nodes (SiFive, StarFive, Milk-V).
 
 * [BrakerRak](https://github.com/drewv-labs/brakerrak) (`WIP`): Bare-metal RISC-V Data Engineering & Edge ML research rack: PostgreSQL 18 io_uring brokers, 4Kn NVMe, Btrfs RAID10, and CTD telemetry.
 
